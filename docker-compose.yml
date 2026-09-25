@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: cloudforge-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: cloudforge
+      POSTGRES_USER: cloudforge
+      POSTGRES_PASSWORD: cloudforge_dev
+
+    ports:
+      - "127.0.0.1:5434:5432"
+
+    volumes:
+      - cloudforge_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  cloudforge_postgres_data:
