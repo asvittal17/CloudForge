@@ -1,5 +1,6 @@
 from app.db.database import Base, engine
 from app.models.user import User
+from app.models.project import Project
 
 
 def init_db():
