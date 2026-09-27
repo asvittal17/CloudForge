@@ -5,73 +5,45 @@ import {
   Navigate,
 } from "react-router-dom"
 
+import { ThemeProvider } from "./context/ThemeContext"
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
 import ProjectDetails from "./pages/ProjectDetails"
 import Terraform from "./pages/Terraform"
 import AIInfrastructure from "./pages/AIInfrastructure"
 
-
 function App() {
   return (
-    <BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Authentication */}
+          <Route path="/login" element={<Login />} />
 
-      <Routes>
+          {/* Dashboard */}
+          <Route path="/dashboard" element={<Dashboard />} />
 
-        {/* Authentication */}
+          {/* Project Details */}
+          <Route path="/projects/:projectId" element={<ProjectDetails />} />
 
-        <Route
-          path="/login"
-          element={<Login />}
-        />
+          {/* Terraform Generator */}
+          <Route
+            path="/projects/:projectId/terraform"
+            element={<Terraform />}
+          />
 
+          {/* AI Infrastructure */}
+          <Route
+            path="/projects/:projectId/ai"
+            element={<AIInfrastructure />}
+          />
 
-        {/* Dashboard */}
-
-        <Route
-          path="/dashboard"
-          element={<Dashboard />}
-        />
-
-
-        {/* Project Details */}
-
-        <Route
-          path="/projects/:projectId"
-          element={<ProjectDetails />}
-        />
-
-
-        {/* Terraform Generator */}
-
-        <Route
-          path="/projects/:projectId/terraform"
-          element={<Terraform />}
-        />
-
-
-        {/* Default */}
-
-        <Route
-          path="/"
-          element={
-            <Navigate
-              to="/login"
-              replace
-            />
-          }
-        />
-
-        <Route
-  path="/projects/:projectId/ai"
-  element={<AIInfrastructure />}
-/>
-
-      </Routes>
-
-    </BrowserRouter>
+          {/* Default */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
-
 
 export default App

@@ -6,11 +6,17 @@ import {
   validateTerraform,
   planTerraform,
 } from "../services/api"
-
-
-// ========================================
-// Terraform Response
-// ========================================
+import { Navbar } from "../components/Navbar"
+import { CodeViewer } from "../components/CodeViewer"
+import { WorkflowStepper } from "../components/WorkflowStepper"
+import type { WorkflowStepId } from "../components/WorkflowStepper"
+import {
+  IconArrowLeft,
+  IconFileCode,
+  IconCheckCircle,
+  IconAlertCircle,
+  IconPlay,
+} from "../components/Icons"
 
 interface TerraformResponse {
   project_id: number
@@ -25,11 +31,6 @@ interface TerraformResponse {
   }
 }
 
-
-// ========================================
-// Validation Response
-// ========================================
-
 interface ValidationResponse {
   project_id: number
   project_name: string
@@ -41,11 +42,6 @@ interface ValidationResponse {
   validation_error: string
 }
 
-
-// ========================================
-// Plan Response
-// ========================================
-
 interface PlanResponse {
   project_id: number
   project_name: string
@@ -54,77 +50,23 @@ interface PlanResponse {
   plan_error: string
 }
 
-
-// ========================================
-// Terraform File Type
-// ========================================
-
-type TerraformFile =
-  | "main.tf"
-  | "variables.tf"
-  | "outputs.tf"
-
+type TerraformFile = "main.tf" | "variables.tf" | "outputs.tf"
 
 function Terraform() {
   const { projectId } = useParams()
   const navigate = useNavigate()
 
+  const [terraform, setTerraform] = useState<TerraformResponse | null>(null)
+  const [activeFile, setActiveFile] = useState<TerraformFile>("main.tf")
 
-  // ========================================
-  // Terraform State
-  // ========================================
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const [terraform, setTerraform] =
-    useState<TerraformResponse | null>(null)
+  const [validation, setValidation] = useState<ValidationResponse | null>(null)
+  const [validating, setValidating] = useState(false)
 
-  const [activeFile, setActiveFile] =
-    useState<TerraformFile>("main.tf")
-
-
-  // ========================================
-  // Generation State
-  // ========================================
-
-  const [loading, setLoading] =
-    useState(false)
-
-  const [error, setError] =
-    useState("")
-
-
-  // ========================================
-  // Validation State
-  // ========================================
-
-  const [validation, setValidation] =
-    useState<ValidationResponse | null>(null)
-
-  const [validating, setValidating] =
-    useState(false)
-
-
-  // ========================================
-  // Terraform Plan State
-  // ========================================
-
-  const [plan, setPlan] =
-    useState<PlanResponse | null>(null)
-
-  const [planning, setPlanning] =
-    useState(false)
-
-
-  // ========================================
-  // Copy State
-  // ========================================
-
-  const [copied, setCopied] =
-    useState(false)
-
-
-  // ========================================
-  // Generate Terraform
-  // ========================================
+  const [plan, setPlan] = useState<PlanResponse | null>(null)
+  const [planning, setPlanning] = useState(false)
 
   async function handleGenerateTerraform() {
     if (!projectId) {
@@ -137,34 +79,19 @@ function Terraform() {
       setError("")
       setValidation(null)
       setPlan(null)
-      setCopied(false)
 
-      const data =
-        await generateTerraform(
-          Number(projectId)
-        )
-
+      const data = await generateTerraform(Number(projectId))
       setTerraform(data)
-
-    } catch (error) {
-
-      if (error instanceof Error) {
-        setError(error.message)
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
       } else {
-        setError(
-          "Failed to generate Terraform"
-        )
+        setError("Failed to generate Terraform")
       }
-
     } finally {
       setLoading(false)
     }
   }
-
-
-  // ========================================
-  // Validate Terraform
-  // ========================================
 
   async function handleValidateTerraform() {
     if (!projectId) {
@@ -176,32 +103,18 @@ function Terraform() {
       setValidating(true)
       setError("")
 
-      const data =
-        await validateTerraform(
-          Number(projectId)
-        )
-
+      const data = await validateTerraform(Number(projectId))
       setValidation(data)
-
-    } catch (error) {
-
-      if (error instanceof Error) {
-        setError(error.message)
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
       } else {
-        setError(
-          "Failed to validate Terraform"
-        )
+        setError("Failed to validate Terraform")
       }
-
     } finally {
       setValidating(false)
     }
   }
-
-
-  // ========================================
-  // Terraform Plan
-  // ========================================
 
   async function handlePlanTerraform() {
     if (!projectId) {
@@ -214,630 +127,384 @@ function Terraform() {
       setError("")
       setPlan(null)
 
-      const data =
-        await planTerraform(
-          Number(projectId)
-        )
-
+      const data = await planTerraform(Number(projectId))
       setPlan(data)
-
-    } catch (error) {
-
-      if (error instanceof Error) {
-        setError(error.message)
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
       } else {
-        setError(
-          "Failed to generate Terraform plan"
-        )
+        setError("Failed to generate Terraform plan")
       }
-
     } finally {
       setPlanning(false)
     }
   }
 
+  // Calculate workflow stage
+  const currentStep: WorkflowStepId = plan
+    ? "approve"
+    : validation
+      ? "plan"
+      : terraform
+        ? "validate"
+        : "generate"
 
-  // ========================================
-  // Copy Code
-  // ========================================
-
-  async function handleCopy() {
-    if (!terraform) {
-      return
-    }
-
-    const code =
-      terraform.files[activeFile]
-
-    try {
-
-      await navigator.clipboard.writeText(
-        code
-      )
-
-      setCopied(true)
-
-      setTimeout(() => {
-        setCopied(false)
-      }, 2000)
-
-    } catch {
-      setError(
-        "Failed to copy Terraform code"
-      )
-    }
-  }
-
-
-  // ========================================
-  // Current Terraform Code
-  // ========================================
-
-  const currentCode =
-    terraform?.files[activeFile] || ""
-
-
-  // ========================================
-  // UI
-  // ========================================
+  const completedSteps: WorkflowStepId[] = []
+  if (terraform) completedSteps.push("generate")
+  if (validation?.valid) completedSteps.push("validate")
+  if (plan?.success) completedSteps.push("plan")
 
   return (
-    <div className="min-h-screen bg-[#0b0d0f] text-[#f3f7f6]">
+    <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-[#030507] dark:text-slate-100">
+      {/* Top Navbar */}
+      <Navbar
+        breadcrumbs={[
+          { label: "Console", href: "/dashboard" },
+          { label: "Projects", href: `/projects/${projectId}` },
+          { label: "Terraform IaC" },
+        ]}
+      />
 
-      {/* ==================================
-          Header
-      ================================== */}
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Back navigation */}
+        <button
+          type="button"
+          onClick={() => navigate(`/projects/${projectId}`)}
+          className="mb-6 flex items-center gap-1.5 text-xs font-medium text-slate-500 transition hover:text-slate-900 dark:text-[#768597] dark:hover:text-slate-200"
+        >
+          <IconArrowLeft className="h-3.5 w-3.5" />
+          <span>Back to Project Workspace</span>
+        </button>
 
-      <header className="border-b border-[#263035] bg-[#0f1214]">
+        {/* Workflow Stepper */}
+        <div className="mb-8">
+          <WorkflowStepper
+            currentStep={currentStep}
+            completedSteps={completedSteps}
+          />
+        </div>
 
-        <div className="flex h-16 items-center justify-between px-8">
-
-          <div className="flex items-center gap-3">
-
-            <button
-              type="button"
-              onClick={() =>
-                navigate(
-                  `/projects/${projectId}`
-                )
-              }
-              className="text-sm text-[#8a9997] transition hover:text-[#28d7c5]"
-            >
-              ← Project
-            </button>
-
-            <span className="text-[#263035]">
-              /
-            </span>
-
-            <span className="text-sm font-medium">
-              Terraform
-            </span>
-
+        {/* Page Header */}
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+                Infrastructure as Code
+              </span>
+              <span className="text-slate-300 dark:text-[#232b36]">•</span>
+              <span className="font-mono text-xs text-slate-500 dark:text-[#657385]">
+                Terraform Engine
+              </span>
+            </div>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+              Terraform Generator
+            </h1>
+            <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
+              Generate, format, validate, and plan Terraform configuration files from your CloudForge architecture specification.
+            </p>
           </div>
 
-
-          <div className="flex items-center gap-3">
-
-            {terraform && (
-
-              <span className="rounded-full border border-[#63e6be]/20 bg-[#63e6be]/5 px-3 py-1 text-xs font-medium text-[#63e6be]">
-                Generated
-              </span>
-
-            )}
-
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={handleGenerateTerraform}
               disabled={loading}
-              className="rounded-lg bg-[#28d7c5] px-5 py-2.5 text-sm font-semibold text-[#0b0d0f] transition hover:bg-[#63e6be] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
             >
-              {loading
-                ? "Generating..."
-                : "Generate Terraform"}
+              {loading ? (
+                <>
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <span>Generating Terraform...</span>
+                </>
+              ) : (
+                <>
+                  <IconFileCode className="h-4 w-4" />
+                  <span>{terraform ? "Regenerate Terraform" : "Generate Terraform"}</span>
+                </>
+              )}
             </button>
-
           </div>
-
         </div>
 
-      </header>
-
-
-      {/* ==================================
-          Main
-      ================================== */}
-
-      <main className="mx-auto max-w-7xl px-6 py-10 lg:px-10">
-
-        {/* ==================================
-            Page Header
-        ================================== */}
-
-        <div className="mb-8">
-
-          <p className="text-xs font-medium uppercase tracking-[0.15em] text-[#53605f]">
-            Infrastructure as Code
-          </p>
-
-          <h1 className="mt-2 text-3xl font-semibold">
-            Terraform Generator
-          </h1>
-
-          <p className="mt-2 max-w-2xl text-sm text-[#8a9997]">
-            Generate and validate Terraform
-            configuration from your CloudForge
-            infrastructure settings.
-          </p>
-
-        </div>
-
-
-        {/* ==================================
-            Error
-        ================================== */}
-
+        {/* Global Error Banner */}
         {error && (
-
-          <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
-            {error}
+          <div className="mt-6 flex items-center gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-600 dark:text-red-400">
+            <IconAlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </div>
-
         )}
 
-
-        {/* ==================================
-            Infrastructure Summary
-        ================================== */}
-
+        {/* Infrastructure Metadata Strip */}
         {terraform && (
-
-          <div className="mb-6 grid gap-4 md:grid-cols-4">
-
-            <div className="rounded-xl border border-[#263035] bg-[#121619] p-5">
-
-              <p className="text-xs uppercase tracking-wider text-[#53605f]">
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
                 Project
-              </p>
-
-              <p className="mt-2 text-sm font-medium">
+              </span>
+              <p className="mt-1 font-semibold text-slate-900 dark:text-white truncate">
                 {terraform.project_name}
               </p>
-
             </div>
 
-
-            <div className="rounded-xl border border-[#263035] bg-[#121619] p-5">
-
-              <p className="text-xs uppercase tracking-wider text-[#53605f]">
-                Provider
-              </p>
-
-              <p className="mt-2 text-sm font-medium">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                Cloud Provider
+              </span>
+              <p className="mt-1 font-semibold text-teal-600 dark:text-teal-400">
                 {terraform.cloud_provider}
               </p>
-
             </div>
 
-
-            <div className="rounded-xl border border-[#263035] bg-[#121619] p-5">
-
-              <p className="text-xs uppercase tracking-wider text-[#53605f]">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
                 Region
-              </p>
-
-              <p className="mt-2 font-mono text-sm">
+              </span>
+              <p className="mt-1 font-mono font-semibold text-slate-900 dark:text-white">
                 {terraform.region}
               </p>
-
             </div>
 
-
-            <div className="rounded-xl border border-[#263035] bg-[#121619] p-5">
-
-              <p className="text-xs uppercase tracking-wider text-[#53605f]">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
                 Environment
-              </p>
-
-              <p className="mt-2 text-sm font-medium">
+              </span>
+              <p className="mt-1 capitalize font-semibold text-slate-900 dark:text-white">
                 {terraform.environment}
               </p>
-
             </div>
-
           </div>
-
         )}
 
-
-        {/* ==================================
-            Empty State
-        ================================== */}
-
+        {/* Empty State */}
         {!terraform && !loading && (
-
-          <div className="flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-[#263035] bg-[#121619] px-6 text-center">
-
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-[#28d7c5]/20 bg-[#28d7c5]/5">
-
-              <span className="text-xl text-[#28d7c5]">
-                TF
-              </span>
-
+          <div className="mt-8 flex min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm dark:border-[#222a36] dark:bg-[#080b0f]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/30 dark:bg-teal-400/10 dark:text-teal-400">
+              <IconFileCode className="h-6 w-6" />
             </div>
 
-
-            <h2 className="mt-5 text-xl font-semibold">
-              Terraform not generated
+            <h2 className="mt-4 text-base font-semibold text-slate-900 dark:text-white">
+              Terraform files not generated yet
             </h2>
-
-
-            <p className="mt-2 max-w-md text-sm text-[#8a9997]">
-              Generate Terraform code from the
-              infrastructure configuration stored
-              for this project.
+            <p className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500 dark:text-[#768597]">
+              Synthesize deterministic HCL configuration code from the infrastructure specifications saved in this project.
             </p>
-
 
             <button
               type="button"
               onClick={handleGenerateTerraform}
-              className="mt-6 rounded-lg bg-[#28d7c5] px-5 py-2.5 text-sm font-semibold text-[#0b0d0f] transition hover:bg-[#63e6be]"
+              className="mt-6 flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
             >
-              Generate Terraform
+              <IconFileCode className="h-4 w-4" />
+              <span>Generate Terraform</span>
             </button>
-
           </div>
-
         )}
 
-
-        {/* ==================================
-            Terraform Code
-        ================================== */}
-
+        {/* Code Preview Section */}
         {terraform && (
+          <div className="mt-8 space-y-6">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                  Terraform Source Code
+                </span>
+                <span className="font-mono text-[11px] text-slate-400 dark:text-[#525e6e]">
+                  Target: {terraform.cloud_provider} • {terraform.region}
+                </span>
+              </div>
 
-          <div className="overflow-hidden rounded-xl border border-[#263035] bg-[#121619]">
+              <CodeViewer
+                files={terraform.files}
+                activeFile={activeFile}
+                onSelectFile={(f) => setActiveFile(f as TerraformFile)}
+                maxHeight="480px"
+                title={`${terraform.project_name} / terraform`}
+              />
+            </div>
 
-            {/* ==================================
-                File Tabs
-            ================================== */}
+            {/* Validation & Plan Action Bar */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                    Quality Gate
+                  </span>
+                  <h2 className="mt-0.5 text-base font-semibold text-slate-900 dark:text-white">
+                    Validate & Plan Configuration
+                  </h2>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-[#768597]">
+                    Execute syntax formatting, semantic validation, and dry-run change calculation without applying changes to AWS.
+                  </p>
+                </div>
 
-            <div className="flex items-center justify-between border-b border-[#263035]">
-
-              <div className="flex">
-
-                {(
-                  [
-                    "main.tf",
-                    "variables.tf",
-                    "outputs.tf",
-                  ] as TerraformFile[]
-                ).map((file) => (
-
+                <div className="flex flex-wrap items-center gap-2.5">
                   <button
-                    key={file}
                     type="button"
-                    onClick={() =>
-                      setActiveFile(file)
-                    }
-                    className={`border-r border-[#263035] px-5 py-3 text-sm font-medium transition ${
-                      activeFile === file
-                        ? "border-b-2 border-b-[#28d7c5] bg-[#181d20] text-[#28d7c5]"
-                        : "text-[#8a9997] hover:bg-[#181d20] hover:text-[#f3f7f6]"
-                    }`}
+                    onClick={handleValidateTerraform}
+                    disabled={validating}
+                    className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-4 py-2 text-xs font-semibold text-teal-600 transition hover:bg-teal-500/20 disabled:opacity-50 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-300"
                   >
-                    {file}
+                    {validating ? (
+                      <>
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        <span>Validating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconCheckCircle className="h-3.5 w-3.5" />
+                        <span>Validate Terraform</span>
+                      </>
+                    )}
                   </button>
 
-                ))}
-
-              </div>
-
-
-              {/* Copy */}
-
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="mr-3 rounded-lg border border-[#263035] px-3 py-1.5 text-xs font-medium text-[#8a9997] transition hover:border-[#28d7c5]/50 hover:text-[#28d7c5]"
-              >
-                {copied
-                  ? "Copied!"
-                  : "Copy Code"}
-              </button>
-
-            </div>
-
-
-            {/* ==================================
-                Code
-            ================================== */}
-
-            <div className="overflow-auto">
-
-              <pre className="min-h-[520px] p-6 text-sm leading-6 text-[#c7d2d0]">
-
-                <code>
-                  {currentCode}
-                </code>
-
-              </pre>
-
-            </div>
-
-          </div>
-
-        )}
-
-
-        {/* ==================================
-            Validation
-        ================================== */}
-
-        {terraform && (
-
-          <div className="mt-6 rounded-xl border border-[#263035] bg-[#121619] p-6">
-
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-
-              <div>
-
-                <p className="text-xs font-medium uppercase tracking-wider text-[#53605f]">
-                  Terraform Validation
-                </p>
-
-                <h2 className="mt-1 text-lg font-semibold">
-                  Check configuration
-                </h2>
-
-                <p className="mt-1 text-sm text-[#8a9997]">
-                  Run Terraform formatting and
-                  validation without deploying anything.
-                </p>
-
-              </div>
-
-
-              <div className="flex flex-wrap gap-3">
-
-                {/* Validate */}
-
-                <button
-                  type="button"
-                  onClick={handleValidateTerraform}
-                  disabled={validating}
-                  className="rounded-lg border border-[#28d7c5]/40 px-5 py-2.5 text-sm font-semibold text-[#28d7c5] transition hover:bg-[#28d7c5]/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {validating
-                    ? "Validating..."
-                    : "Validate Terraform"}
-                </button>
-
-
-                {/* Plan */}
-
-                <button
-                  type="button"
-                  onClick={handlePlanTerraform}
-                  disabled={planning}
-                  className="rounded-lg bg-[#28d7c5] px-5 py-2.5 text-sm font-semibold text-[#0b0d0f] transition hover:bg-[#63e6be] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {planning
-                    ? "Generating Plan..."
-                    : "Preview Terraform Plan"}
-                </button>
-
-              </div>
-
-            </div>
-
-
-            {/* ==================================
-                Validation Result
-            ================================== */}
-
-            {validation && (
-
-              <div className="mt-6 border-t border-[#263035] pt-6">
-
-                <div className="grid gap-4 md:grid-cols-2">
-
-                  {/* Valid */}
-
-                  <div
-                    className={`rounded-lg border p-4 ${
-                      validation.valid
-                        ? "border-[#63e6be]/20 bg-[#63e6be]/5"
-                        : "border-red-500/20 bg-red-500/5"
-                    }`}
+                  <button
+                    type="button"
+                    onClick={handlePlanTerraform}
+                    disabled={planning}
+                    className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
                   >
-
-                    <p className="text-xs uppercase tracking-wider text-[#53605f]">
-                      Terraform Validate
-                    </p>
-
-                    <p
-                      className={`mt-2 text-lg font-semibold ${
-                        validation.valid
-                          ? "text-[#63e6be]"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {validation.valid
-                        ? "✓ Configuration is valid"
-                        : "✕ Configuration is invalid"}
-                    </p>
-
-                  </div>
-
-
-                  {/* Formatting */}
-
-                  <div
-                    className={`rounded-lg border p-4 ${
-                      validation.formatted
-                        ? "border-[#63e6be]/20 bg-[#63e6be]/5"
-                        : "border-yellow-500/20 bg-yellow-500/5"
-                    }`}
-                  >
-
-                    <p className="text-xs uppercase tracking-wider text-[#53605f]">
-                      Terraform Format
-                    </p>
-
-                    <p
-                      className={`mt-2 text-lg font-semibold ${
-                        validation.formatted
-                          ? "text-[#63e6be]"
-                          : "text-yellow-400"
-                      }`}
-                    >
-                      {validation.formatted
-                        ? "✓ Properly formatted"
-                        : "⚠ Formatting required"}
-                    </p>
-
-                  </div>
-
+                    {planning ? (
+                      <>
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        <span>Generating Plan...</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconPlay className="h-3 w-3" />
+                        <span>Preview Execution Plan</span>
+                      </>
+                    )}
+                  </button>
                 </div>
+              </div>
 
+              {/* Validation Result Box */}
+              {validation && (
+                <div className="mt-6 border-t border-slate-200/80 pt-6 dark:border-[#171e27]">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div
+                      className={`flex items-center justify-between rounded-xl border p-4 ${
+                        validation.valid
+                          ? "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10"
+                          : "border-red-500/20 bg-red-500/5 dark:bg-red-500/10"
+                      }`}
+                    >
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                          Validation Check
+                        </span>
+                        <p
+                          className={`mt-1 font-semibold ${
+                            validation.valid ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+                          }`}
+                        >
+                          {validation.valid ? "✓ Configuration is valid" : "✕ Configuration is invalid"}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 font-mono text-[9px] font-bold ${
+                          validation.valid
+                            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                            : "bg-red-500/20 text-red-700 dark:text-red-300"
+                        }`}
+                      >
+                        {validation.valid ? "PASSED" : "FAILED"}
+                      </span>
+                    </div>
 
-                {/* Validation Output */}
+                    <div
+                      className={`flex items-center justify-between rounded-xl border p-4 ${
+                        validation.formatted
+                          ? "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10"
+                          : "border-amber-500/20 bg-amber-500/5 dark:bg-amber-500/10"
+                      }`}
+                    >
+                      <div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                          Format Check
+                        </span>
+                        <p
+                          className={`mt-1 font-semibold ${
+                            validation.formatted ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {validation.formatted ? "✓ Canonical HCL formatting" : "⚠ Formatting required"}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 font-mono text-[9px] font-bold ${
+                          validation.formatted
+                            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                            : "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                        }`}
+                      >
+                        {validation.formatted ? "CANONICAL" : "FORMAT NEEDED"}
+                      </span>
+                    </div>
+                  </div>
 
-                {(validation.validation_output ||
-                  validation.validation_error) && (
+                  {(validation.validation_output || validation.validation_error) && (
+                    <div className="mt-4">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                        Validation Output Log
+                      </p>
+                      <pre className="overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-800 dark:border-[#1e2531] dark:bg-[#06080b] dark:text-slate-200">
+                        {validation.validation_output || validation.validation_error}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Execution Plan Box */}
+              {plan && (
+                <div className="mt-6 border-t border-slate-200/80 pt-6 dark:border-[#171e27]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                        Dry Run Result
+                      </span>
+                      <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+                        Terraform Execution Plan
+                      </h3>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-bold ${
+                        plan.success
+                          ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      {plan.success ? "PLAN SUCCESSFUL" : "PLAN FAILED"}
+                    </span>
+                  </div>
 
                   <div className="mt-4">
-
-                    <p className="mb-2 text-xs uppercase tracking-wider text-[#53605f]">
-                      Validation Output
-                    </p>
-
-                    <pre
-                      className={`overflow-auto rounded-lg border p-4 text-xs leading-5 ${
-                        validation.valid
-                          ? "border-[#263035] bg-[#0b0d0f] text-[#63e6be]"
-                          : "border-red-500/20 bg-red-500/5 text-red-400"
-                      }`}
-                    >
-                      {validation.validation_output ||
-                        validation.validation_error}
+                    <pre className="max-h-[500px] overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-5 font-mono text-xs leading-relaxed text-slate-200 dark:border-[#1e2531] dark:bg-[#040608]">
+                      {plan.success ? plan.plan_output : plan.plan_error || "Plan execution failed."}
                     </pre>
-
                   </div>
 
-                )}
-
-              </div>
-
-            )}
-
-
-            {/* ==================================
-                Terraform Plan Result
-            ================================== */}
-
-            {plan && (
-
-              <div className="mt-6 border-t border-[#263035] pt-6">
-
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-
-                  <div>
-
-                    <p className="text-xs font-medium uppercase tracking-wider text-[#53605f]">
-                      Terraform Execution Plan
-                    </p>
-
-                    <h2 className="mt-1 text-lg font-semibold">
-                      Infrastructure Preview
-                    </h2>
-
-                    <p className="mt-1 text-sm text-[#8a9997]">
-                      Preview the infrastructure Terraform
-                      would create or change.
-                    </p>
-
-                  </div>
-
-
-                  <div
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      plan.success
-                        ? "border border-[#63e6be]/20 bg-[#63e6be]/5 text-[#63e6be]"
-                        : "border border-red-500/20 bg-red-500/5 text-red-400"
-                    }`}
-                  >
-                    {plan.success
-                      ? "Plan Successful"
-                      : "Plan Failed"}
-                  </div>
-
+                  {plan.success && (
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/70 p-4 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">
+                        Dry-Run Verification Notice:
+                      </span>
+                      <p className="mt-1 text-slate-500 dark:text-[#768597]">
+                        Terraform determined resource changes without modifying any cloud infrastructure. Resources marked with{" "}
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">+</span> would be provisioned when an approved Terraform apply is executed.
+                      </p>
+                    </div>
+                  )}
                 </div>
-
-
-                {/* Plan Output */}
-
-                <div className="mt-5">
-
-                  <p className="mb-2 text-xs uppercase tracking-wider text-[#53605f]">
-                    Plan Output
-                  </p>
-
-                  <pre
-                    className={`max-h-[600px] overflow-auto rounded-lg border p-5 text-xs leading-5 ${
-                      plan.success
-                        ? "border-[#263035] bg-[#0b0d0f] text-[#c7d2d0]"
-                        : "border-red-500/20 bg-red-500/5 text-red-400"
-                    }`}
-                  >
-                    {plan.success
-                      ? plan.plan_output
-                      : plan.plan_error ||
-                        "Terraform plan failed."}
-                  </pre>
-
-                </div>
-
-
-                {/* Plan Explanation */}
-
-                {plan.success && (
-
-                  <div className="mt-4 rounded-lg border border-[#263035] bg-[#0b0d0f] p-4">
-
-                    <p className="text-xs font-medium uppercase tracking-wider text-[#53605f]">
-                      What this means
-                    </p>
-
-                    <p className="mt-2 text-sm leading-6 text-[#8a9997]">
-                      Terraform has calculated the infrastructure
-                      changes without deploying them to AWS.
-                      Resources marked with <span className="font-mono text-[#63e6be]">+</span>
-                      would be created when an approved
-                      Terraform apply is eventually executed.
-                    </p>
-
-                  </div>
-
-                )}
-
-              </div>
-
-            )}
-
+              )}
+            </div>
           </div>
-
         )}
-
       </main>
-
     </div>
   )
 }
-
 
 export default Terraform

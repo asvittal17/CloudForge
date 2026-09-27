@@ -3,7 +3,24 @@ import type { ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { getProjects } from "../services/api"
+import { useTheme } from "../context/ThemeContext"
+import { Navbar } from "../components/Navbar"
+import { Sidebar } from "../components/Sidebar"
+import type { DashboardSection } from "../components/Sidebar"
 import NewProjectModal from "../components/NewProjectModal"
+import {
+  IconPlus,
+  IconProjects,
+  IconInfrastructure,
+  IconDeployments,
+  IconAI,
+  IconCheckCircle,
+  IconRefresh,
+  IconChevronRight,
+  IconServer,
+  IconDatabase,
+  IconCpu,
+} from "../components/Icons"
 
 interface Project {
   id: number
@@ -12,15 +29,6 @@ interface Project {
   owner_id: number
   created_at: string
 }
-
-type Section =
-  | "overview"
-  | "projects"
-  | "infrastructure"
-  | "ai"
-  | "deployments"
-  | "monitoring"
-  | "settings"
 
 interface HealthState {
   status: "idle" | "checking" | "online" | "offline"
@@ -32,49 +40,21 @@ const API_BASE_URL = "http://localhost:8000"
 
 function Dashboard() {
   const navigate = useNavigate()
+  const { isDark, toggleTheme } = useTheme()
 
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("cloudforge_theme") !== "light"
-  })
-
-  const [activeSection, setActiveSection] =
-    useState<Section>("overview")
-
+  const [activeSection, setActiveSection] = useState<DashboardSection>("overview")
   const [projects, setProjects] = useState<Project[]>([])
   const [loadingProjects, setLoadingProjects] = useState(true)
   const [projectError, setProjectError] = useState("")
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const [health, setHealth] = useState<HealthState>({
     status: "idle",
     message: "Not checked yet",
     checkedAt: null,
   })
-
-  const theme = darkMode
-    ? {
-        page: "bg-[#080b0d] text-[#eef5f3]",
-        header: "bg-[#0c1012]/95 border-[#202a2d]",
-        sidebar: "bg-[#0b0f11] border-[#202a2d]",
-        card: "bg-[#101517] border-[#202a2d]",
-        cardStrong: "bg-[#12191b] border-[#273437]",
-        muted: "text-[#8a9997]",
-        subtle: "text-[#536261]",
-        hover: "hover:bg-[#151d20]",
-        input: "bg-[#0b0f11] border-[#293437]",
-      }
-    : {
-        page: "bg-[#f4f8f7] text-[#14201e]",
-        header: "bg-white/95 border-[#dbe5e2]",
-        sidebar: "bg-white border-[#dbe5e2]",
-        card: "bg-white border-[#dbe5e2]",
-        cardStrong: "bg-[#f9fcfb] border-[#d2dfdc]",
-        muted: "text-[#63726f]",
-        subtle: "text-[#84928f]",
-        hover: "hover:bg-[#eef4f2]",
-        input: "bg-[#f8fbfa] border-[#d5e1de]",
-      }
 
   useEffect(() => {
     async function loadProjects() {
@@ -85,9 +65,7 @@ function Dashboard() {
         setProjects(data)
       } catch (error) {
         setProjectError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load projects"
+          error instanceof Error ? error.message : "Failed to load projects"
         )
       } finally {
         setLoadingProjects(false)
@@ -126,9 +104,10 @@ function Dashboard() {
 
       setHealth({
         status: "online",
-        message: data.status === "healthy"
-          ? "CloudForge API is healthy"
-          : "CloudForge API responded",
+        message:
+          data.status === "healthy"
+            ? "CloudForge API is healthy"
+            : "CloudForge API responded",
         checkedAt: new Date().toLocaleTimeString(),
       })
     } catch (error) {
@@ -143,7 +122,7 @@ function Dashboard() {
     }
   }
 
-  function openSection(section: Section) {
+  function openSection(section: DashboardSection) {
     setActiveSection(section)
     setMobileMenuOpen(false)
     window.scrollTo({ top: 0, behavior: "smooth" })
@@ -151,13 +130,10 @@ function Dashboard() {
 
   function openAIInfrastructure() {
     if (!selectedProject) {
-      setProjectError(
-        "Create a project before using AI Infrastructure."
-      )
+      setProjectError("Create a project before using AI Infrastructure.")
       openSection("projects")
       return
     }
-
     navigate(`/projects/${selectedProject.id}/ai`)
   }
 
@@ -178,611 +154,460 @@ function Dashboard() {
     window.location.reload()
   }
 
-  const navigation: {
-    id: Section
-    label: string
-    icon: string
-    description: string
-  }[] = [
-    {
-      id: "overview",
-      label: "Overview",
-      icon: "⌂",
-      description: "Workspace overview",
-    },
-    {
-      id: "projects",
-      label: "Projects",
-      icon: "◇",
-      description: "Manage workspaces",
-    },
-    {
-      id: "infrastructure",
-      label: "Infrastructure",
-      icon: "△",
-      description: "Cloud architecture",
-    },
-    {
-      id: "ai",
-      label: "AI Infrastructure",
-      icon: "✦",
-      description: "Generate infrastructure",
-    },
-    {
-      id: "deployments",
-      label: "Deployments",
-      icon: "↗",
-      description: "Terraform workflow",
-    },
-    {
-      id: "monitoring",
-      label: "Monitoring",
-      icon: "◉",
-      description: "System health",
-    },
-    {
-      id: "settings",
-      label: "Settings",
-      icon: "⚙",
-      description: "Workspace preferences",
-    },
-  ]
-
-  function renderHeader() {
-    return (
-      <header
-        className={`sticky top-0 z-40 border-b backdrop-blur-xl ${theme.header}`}
-      >
-        <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg border lg:hidden ${theme.card}`}
-              aria-label="Open navigation"
-            >
-              ☰
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openSection("overview")}
-              className="flex items-center gap-3"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#28d7c5]/30 bg-[#11191a]">
-                <div className="h-3 w-3 rounded-full bg-[#28d7c5] shadow-[0_0_16px_rgba(40,215,197,0.65)]" />
-              </div>
-
-              <div className="text-left">
-                <p className="text-sm font-semibold tracking-wide">
-                  CloudForge
-                </p>
-                <p className={`text-[10px] uppercase tracking-[0.16em] ${theme.subtle}`}>
-                  Control Plane
-                </p>
-              </div>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 sm:gap-5">
-            <button
-              type="button"
-              onClick={() => {
-                const next = !darkMode
-                setDarkMode(next)
-                localStorage.setItem(
-                  "cloudforge_theme",
-                  next ? "dark" : "light"
-                )
-              }}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg border ${theme.card} transition hover:border-[#28d7c5]/50`}
-              title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {darkMode ? "☀" : "☾"}
-            </button>
-
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium">CloudForge Admin</p>
-              <p className={`text-xs ${theme.subtle}`}>
-                Administrator
-              </p>
-            </div>
-
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#172324] text-xs font-semibold text-[#28d7c5] ring-1 ring-[#28d7c5]/20">
-              CA
-            </div>
-          </div>
-        </div>
-      </header>
-    )
-  }
-
-  function renderSidebar(mobile = false) {
-    return (
-      <aside
-        className={
-          mobile
-            ? `fixed inset-y-0 left-0 z-50 w-72 border-r p-4 shadow-2xl ${theme.sidebar}`
-            : `hidden min-h-[calc(100vh-4rem)] w-64 shrink-0 border-r lg:block ${theme.sidebar}`
-        }
-      >
-        {mobile && (
-          <div className="mb-6 flex items-center justify-between">
-            <p className="text-sm font-semibold">Navigation</p>
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className={`h-8 w-8 rounded-lg border ${theme.card}`}
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        <div className="mb-5 px-3 pt-2">
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${theme.subtle}`}
-          >
-            Workspace
-          </p>
-        </div>
-
-        <nav className="space-y-1">
-          {navigation.slice(0, 5).map((item) => {
-            const active = activeSection === item.id
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (item.id === "ai") {
-                    openAIInfrastructure()
-                    return
-                  }
-                  openSection(item.id)
-                }}
-                className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm transition ${
-                  active
-                    ? "border-[#28d7c5]/20 bg-[#28d7c5]/7 text-[#28d7c5]"
-                    : `border-transparent ${theme.muted} ${theme.hover}`
-                }`}
-              >
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm ${
-                    active
-                      ? "bg-[#28d7c5]/10 text-[#28d7c5]"
-                      : `${theme.card} ${theme.muted}`
-                  }`}
-                >
-                  {item.icon}
-                </span>
-
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{item.label}</span>
-                  <span className={`hidden text-[10px] xl:block ${theme.subtle}`}>
-                    {item.description}
-                  </span>
-                </span>
-
-                {active && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#28d7c5]" />
-                )}
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className="mb-2 mt-8 px-3">
-          <p
-            className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${theme.subtle}`}
-          >
-            Operations
-          </p>
-        </div>
-
-        <nav className="space-y-1">
-          {navigation.slice(5).map((item) => {
-            const active = activeSection === item.id
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => openSection(item.id)}
-                className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm transition ${
-                  active
-                    ? "border-[#28d7c5]/20 bg-[#28d7c5]/7 text-[#28d7c5]"
-                    : `border-transparent ${theme.muted} ${theme.hover}`
-                }`}
-              >
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-                    active
-                      ? "bg-[#28d7c5]/10 text-[#28d7c5]"
-                      : `${theme.card} ${theme.muted}`
-                  }`}
-                >
-                  {item.icon}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{item.label}</span>
-                  <span className={`hidden text-[10px] xl:block ${theme.subtle}`}>
-                    {item.description}
-                  </span>
-                </span>
-                {active && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#28d7c5]" />
-                )}
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className={`mt-8 rounded-xl border p-4 ${theme.card}`}>
-          <p className="text-xs font-semibold">Workspace status</p>
-          <div className="mt-3 flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-[#63e6be] shadow-[0_0_9px_rgba(99,230,190,0.7)]" />
-            <span className="text-xs text-[#63e6be]">
-              API operational
-            </span>
-          </div>
-          <p className={`mt-2 text-[10px] leading-5 ${theme.subtle}`}>
-            Cloud resources are not deployed from this dashboard automatically.
-          </p>
-        </div>
-      </aside>
-    )
-  }
-
+  // ----------------------------------------------------
+  // SECTION: OVERVIEW
+  // ----------------------------------------------------
   function renderOverview() {
     return (
-      <>
-        <section className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+      <div className="space-y-8">
+        {/* Header Action Section */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#28d7c5]">
-              Workspace
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+                Workspace
+              </span>
+              <span className="text-slate-300 dark:text-[#232b36]">•</span>
+              <span className="font-mono text-xs text-slate-500 dark:text-[#657385]">
+                Control Plane
+              </span>
+            </div>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
               Overview
             </h1>
-            <p className={`mt-2 max-w-2xl text-sm leading-6 ${theme.muted}`}>
-              Design, validate, approve, and manage cloud infrastructure from one control plane.
+            <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
+              Design, validate, approve, and manage cloud infrastructure from one unified control plane.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowNewProjectModal(true)}
-            className="rounded-xl bg-[#28d7c5] px-5 py-3 text-sm font-semibold text-[#07100f] shadow-[0_8px_30px_rgba(40,215,197,0.14)] transition hover:bg-[#63e6be]"
-          >
-            + New Project
-          </button>
-        </section>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowNewProjectModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
+            >
+              <IconPlus className="h-4 w-4" />
+              <span>New Project</span>
+            </button>
+          </div>
+        </div>
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Metric Cards Grid */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
-            label="Projects"
-            value={loadingProjects ? "—" : String(projects.length)}
-            detail="Active workspaces"
-            icon="◇"
-            theme={theme}
+            label="Workspaces"
+            value={loadingProjects ? "..." : String(projects.length)}
+            detail="Active project workspaces"
+            icon={<IconProjects className="h-4 w-4 text-teal-600 dark:text-teal-400" />}
           />
-
           <MetricCard
             label="Deployments"
             value="0"
-            detail="No live deployments"
-            icon="↗"
-            theme={theme}
+            detail="No live deployment runs"
+            icon={<IconDeployments className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
           />
-
           <MetricCard
             label="Infrastructure"
             value={String(infrastructureCount)}
-            detail="Managed workspaces"
-            icon="△"
-            theme={theme}
+            detail="Configured cloud targets"
+            icon={<IconInfrastructure className="h-4 w-4 text-teal-600 dark:text-teal-400" />}
           />
-
           <MetricCard
-            label="System status"
+            label="Control Plane"
             value="Online"
-            detail="API operational"
-            icon="●"
-            success
-            theme={theme}
+            detail="API & Services operational"
+            statusSuccess
+            icon={<IconCheckCircle className="h-4 w-4 text-emerald-500" />}
           />
-        </section>
+        </div>
 
-        <section className="mt-8 grid gap-5 xl:grid-cols-[1.5fr_1fr]">
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
-            <div className="flex items-start justify-between gap-4">
+        {/* Workflow & Quick Launch */}
+        <div className="grid gap-5 lg:grid-cols-3">
+          {/* Main Workflow Card */}
+          <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-colors dark:border-[#1c222b] dark:bg-[#080b0f]">
+            <div className="flex items-center justify-between">
               <div>
-                <p className={`text-xs font-semibold uppercase tracking-wider ${theme.subtle}`}>
-                  Infrastructure workflow
-                </p>
-                <h2 className="mt-2 text-xl font-semibold">
-                  From intent to approved Terraform
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                  Deployment Lifecycle
+                </span>
+                <h2 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">
+                  Controlled Infrastructure Pipeline
                 </h2>
-                <p className={`mt-2 text-sm leading-6 ${theme.muted}`}>
-                  CloudForge keeps infrastructure generation and approval separate from real AWS deployment.
-                </p>
               </div>
-
-              <span className="rounded-full border border-[#28d7c5]/20 bg-[#28d7c5]/5 px-3 py-1 text-[10px] font-semibold text-[#28d7c5]">
-                CONTROLLED
+              <span className="rounded-full border border-teal-500/20 bg-teal-500/10 px-2.5 py-0.5 font-mono text-[9px] font-bold text-teal-600 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
+                STAGE-GATE
               </span>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-5">
+            <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-[#768597]">
+              CloudForge strictly separates AI architecture specification, Terraform code generation, validation, and execution planning from live cloud apply.
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
               {[
-                ["01", "Describe", "Natural language"],
-                ["02", "Generate", "AI architecture"],
-                ["03", "Validate", "Terraform checks"],
-                ["04", "Plan", "Preview changes"],
-                ["05", "Approve", "Human approval"],
-              ].map(([number, title, detail]) => (
+                ["01", "Describe", "Prompt"],
+                ["02", "Generate", "Terraform"],
+                ["03", "Validate", "Syntax"],
+                ["04", "Plan", "Dry run"],
+                ["05", "Approve", "Gate"],
+              ].map(([num, title, sub]) => (
                 <div
-                  key={number}
-                  className={`rounded-xl border p-4 ${theme.cardStrong}`}
+                  key={num}
+                  className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3 dark:border-[#171e27] dark:bg-[#0c1015]"
                 >
-                  <p className="text-[10px] font-semibold text-[#28d7c5]">
-                    {number}
+                  <span className="font-mono text-[10px] font-bold text-teal-600 dark:text-teal-400">
+                    {num}
+                  </span>
+                  <p className="mt-1 text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    {title}
                   </p>
-                  <p className="mt-3 text-sm font-semibold">{title}</p>
-                  <p className={`mt-1 text-[10px] leading-4 ${theme.subtle}`}>
-                    {detail}
+                  <p className="text-[10px] text-slate-400 dark:text-[#525e6e]">
+                    {sub}
                   </p>
                 </div>
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={openAIInfrastructure}
-              disabled={!selectedProject}
-              className="mt-6 rounded-xl border border-[#28d7c5]/30 bg-[#28d7c5]/5 px-4 py-2.5 text-sm font-semibold text-[#28d7c5] transition hover:bg-[#28d7c5]/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              ✦ Open AI Infrastructure
-            </button>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={openAIInfrastructure}
+                disabled={!selectedProject}
+                className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-40 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
+              >
+                <IconAI className="h-3.5 w-3.5" />
+                <span>Launch AI Infrastructure Builder</span>
+              </button>
+              {selectedProject && (
+                <span className="text-[11px] text-slate-400 dark:text-[#525e6e]">
+                  Active: <span className="font-medium text-slate-700 dark:text-slate-300">{selectedProject.name}</span>
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
+          {/* Quick System Telemetry */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-colors dark:border-[#1c222b] dark:bg-[#080b0f]">
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-xs font-semibold uppercase tracking-wider ${theme.subtle}`}>
-                  System
-                </p>
-                <h2 className="mt-2 text-xl font-semibold">
-                  Platform health
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                  Status
+                </span>
+                <h2 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">
+                  Platform Services
                 </h2>
               </div>
-              <span className="h-2.5 w-2.5 rounded-full bg-[#63e6be] shadow-[0_0_12px_rgba(99,230,190,0.6)]" />
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             </div>
 
-            <div className={`mt-6 rounded-xl border p-4 ${theme.cardStrong}`}>
-              <div className="flex items-center justify-between gap-4">
-                <span className={`text-sm ${theme.muted}`}>
-                  FastAPI
-                </span>
-                <span className="text-xs font-semibold text-[#63e6be]">
-                  Operational
+            <div className="mt-5 space-y-3">
+              <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+                <div className="flex items-center gap-2.5">
+                  <IconServer className="h-4 w-4 text-slate-400" />
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    FastAPI Engine
+                  </span>
+                </div>
+                <span className="font-mono text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  HEALTHY
                 </span>
               </div>
-              <div className={`mt-3 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-[#1c2829]" : "bg-[#e1ece9]"}`}>
-                <div className="h-full w-full rounded-full bg-[#28d7c5]" />
-              </div>
-            </div>
 
-            <div className={`mt-3 rounded-xl border p-4 ${theme.cardStrong}`}>
-              <div className="flex items-center justify-between gap-4">
-                <span className={`text-sm ${theme.muted}`}>
-                  PostgreSQL
-                </span>
-                <span className="text-xs font-semibold text-[#63e6be]">
-                  Connected
+              <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+                <div className="flex items-center gap-2.5">
+                  <IconDatabase className="h-4 w-4 text-slate-400" />
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    PostgreSQL DB
+                  </span>
+                </div>
+                <span className="font-mono text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  CONNECTED
                 </span>
               </div>
-              <div className={`mt-3 h-1.5 overflow-hidden rounded-full ${darkMode ? "bg-[#1c2829]" : "bg-[#e1ece9]"}`}>
-                <div className="h-full w-full rounded-full bg-[#63e6be]" />
+
+              <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+                <div className="flex items-center gap-2.5">
+                  <IconCpu className="h-4 w-4 text-slate-400" />
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    AI Runtime
+                  </span>
+                </div>
+                <span className="font-mono text-[10px] font-semibold text-teal-600 dark:text-teal-400">
+                  OLLAMA
+                </span>
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => openSection("monitoring")}
-              className={`mt-5 w-full rounded-xl border px-4 py-2.5 text-sm font-medium ${theme.muted} transition hover:border-[#28d7c5]/40 hover:text-[#28d7c5]`}
+              className="mt-5 flex w-full items-center justify-center gap-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 dark:border-[#1e2531] dark:text-slate-400 dark:hover:bg-[#12161f] dark:hover:text-slate-200"
             >
-              Open Monitoring →
+              <span>View Full Monitoring</span>
+              <IconChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
-        </section>
+        </div>
 
+        {/* Project List Subsection */}
         {renderProjectList(true)}
-      </>
+      </div>
     )
   }
 
+  // ----------------------------------------------------
+  // SECTION: PROJECTS LIST
+  // ----------------------------------------------------
   function renderProjectList(compact = false) {
     return (
-      <section className={`${compact ? "mt-8" : ""}`}>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <div>
-            <p className={`text-xs font-semibold uppercase tracking-wider ${theme.subtle}`}>
-              {compact ? "Recent workspaces" : "Projects"}
-            </p>
-            <h2 className="mt-1 text-xl font-semibold">
-              Your CloudForge projects
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              {compact ? "Recent Projects" : "All Projects"}
             </h2>
+            <p className="text-xs text-slate-500 dark:text-[#768597]">
+              {compact
+                ? "Active infrastructure environments in your workspace."
+                : "Manage all CloudForge project workspaces."}
+            </p>
+          </div>
+
+          {compact && (
+            <button
+              type="button"
+              onClick={() => openSection("projects")}
+              className="flex items-center gap-1 text-xs font-semibold text-teal-600 transition hover:text-teal-500 dark:text-teal-400 dark:hover:text-teal-300"
+            >
+              <span>View all projects</span>
+              <IconChevronRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {loadingProjects ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500 dark:border-[#1c222b] dark:bg-[#080b0f] dark:text-[#768597]">
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+            <p className="mt-2 font-medium">Loading workspaces...</p>
+          </div>
+        ) : projectError ? (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-xs text-red-600 dark:text-red-400">
+            <p className="font-semibold">{projectError}</p>
+            <button
+              type="button"
+              onClick={refreshProjects}
+              className="mt-3 rounded-md border border-red-500/30 px-3 py-1.5 font-medium hover:bg-red-500/20"
+            >
+              Retry
+            </button>
+          </div>
+        ) : projects.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-[#222a36] dark:bg-[#080b0f]">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/20 dark:bg-teal-400/10 dark:text-teal-400">
+              <IconProjects className="h-5 w-5" />
+            </div>
+            <h3 className="mt-3 text-sm font-semibold text-slate-900 dark:text-white">
+              No projects created yet
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-[#768597]">
+              Get started by provisioning your first CloudForge workspace.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowNewProjectModal(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
+            >
+              <IconPlus className="h-3.5 w-3.5" />
+              <span>Create Project</span>
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+            <div className="divide-y divide-slate-100 dark:divide-[#141a22]">
+              {projects.slice(0, compact ? 4 : projects.length).map((project) => (
+                <div
+                  key={project.id}
+                  className="flex flex-col gap-4 p-5 transition hover:bg-slate-50/60 sm:flex-row sm:items-center sm:justify-between dark:hover:bg-[#0b0f14]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2.5">
+                      <span className="font-mono text-xs font-bold text-slate-400 dark:text-[#525e6e]">
+                        #{project.id}
+                      </span>
+                      <h3 className="font-semibold text-slate-900 dark:text-white">
+                        {project.name}
+                      </h3>
+                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.2 font-mono text-[9px] font-bold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-400">
+                        ACTIVE
+                      </span>
+                    </div>
+
+                    <p className="mt-1 truncate text-xs text-slate-500 dark:text-[#768597]">
+                      {project.description || "No project description provided."}
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      {["AWS", "TERRAFORM", "INFRA"].map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[9px] text-slate-500 dark:border-[#19202a] dark:bg-[#0e1217] dark:text-[#5c6b7e]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      <span className="font-mono text-[10px] text-slate-400 dark:text-[#455263]">
+                        Created {new Date(project.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start sm:self-center">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/projects/${project.id}/ai`)}
+                      className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-1.5 text-xs font-semibold text-teal-600 transition hover:bg-teal-500/20 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-300 dark:hover:bg-teal-400/20"
+                    >
+                      <IconAI className="h-3.5 w-3.5" />
+                      <span>AI Builder</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openProject(project.id)}
+                      className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-[#1e2531] dark:bg-[#0e1217] dark:text-slate-300 dark:hover:bg-[#151b22]"
+                    >
+                      <span>Workspace</span>
+                      <IconChevronRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ----------------------------------------------------
+  // SECTION: PROJECTS FULL
+  // ----------------------------------------------------
+  function renderProjects() {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+              Workspace
+            </span>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+              Projects
+            </h1>
+            <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
+              Manage all CloudForge infrastructure workspaces and launch attached tooling.
+            </p>
           </div>
 
           <button
             type="button"
-            onClick={() => openSection("projects")}
-            className="text-xs font-semibold text-[#28d7c5] hover:text-[#63e6be]"
+            onClick={() => setShowNewProjectModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
           >
-            View all →
+            <IconPlus className="h-4 w-4" />
+            <span>New Project</span>
           </button>
         </div>
 
-        <div className={`overflow-hidden rounded-2xl border ${theme.card}`}>
-          {loadingProjects ? (
-            <div className="p-8 text-sm">
-              <p className={theme.muted}>Loading projects...</p>
-            </div>
-          ) : projectError ? (
-            <div className="p-8">
-              <p className="text-sm text-red-400">{projectError}</p>
-              <button
-                type="button"
-                onClick={refreshProjects}
-                className="mt-4 rounded-lg border border-red-500/30 px-3 py-2 text-xs text-red-300"
-              >
-                Retry
-              </button>
-            </div>
-          ) : projects.length === 0 ? (
-            <div className="p-8">
-              <p className="font-medium">No projects yet</p>
-              <p className={`mt-1 text-sm ${theme.muted}`}>
-                Create your first CloudForge workspace.
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowNewProjectModal(true)}
-                className="mt-4 rounded-lg bg-[#28d7c5] px-4 py-2 text-sm font-semibold text-[#07100f]"
-              >
-                + Create project
-              </button>
-            </div>
-          ) : (
-            projects.slice(0, compact ? 4 : projects.length).map((project) => (
-              <div
-                key={project.id}
-                className={`flex flex-col gap-5 border-b p-6 last:border-b-0 ${darkMode ? "border-[#202a2d]" : "border-[#dbe5e2]"} lg:flex-row lg:items-center lg:justify-between`}
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="truncate font-semibold">
-                      {project.name}
-                    </h3>
-                    <span className="rounded-full border border-[#63e6be]/20 bg-[#63e6be]/5 px-2 py-0.5 text-[10px] font-semibold text-[#63e6be]">
-                      ACTIVE
-                    </span>
-                  </div>
-
-                  <p className={`mt-2 max-w-2xl text-sm ${theme.muted}`}>
-                    {project.description || "No project description provided."}
-                  </p>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {["AWS", "TERRAFORM", "DOCKER"].map((tag) => (
-                      <span
-                        key={tag}
-                        className={`rounded-md border px-2 py-1 font-mono text-[9px] ${theme.header} ${theme.muted}`}
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/projects/${project.id}/ai`)}
-                    className="rounded-lg border border-[#28d7c5]/30 bg-[#28d7c5]/5 px-3 py-2 text-xs font-semibold text-[#28d7c5] transition hover:bg-[#28d7c5]/10"
-                  >
-                    ✦ AI Architecture
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openProject(project.id)}
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${theme.muted} transition hover:border-[#28d7c5]/40 hover:text-[#28d7c5]`}
-                  >
-                    Open Project →
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-    )
-  }
-
-  function renderProjects() {
-    return (
-      <>
-        <PageHeading
-          eyebrow="Workspace"
-          title="Projects"
-          description="Manage your CloudForge infrastructure workspaces and open the tools attached to each project."
-          theme={theme}
-          action={
-            <button
-              type="button"
-              onClick={() => setShowNewProjectModal(true)}
-              className="rounded-xl bg-[#28d7c5] px-5 py-3 text-sm font-semibold text-[#07100f]"
-            >
-              + New Project
-            </button>
-          }
-        />
-
         {renderProjectList(false)}
-      </>
+      </div>
     )
   }
 
+  // ----------------------------------------------------
+  // SECTION: INFRASTRUCTURE
+  // ----------------------------------------------------
   function renderInfrastructure() {
     return (
-      <>
-        <PageHeading
-          eyebrow="Cloud resources"
-          title="Infrastructure"
-          description="Open a project to inspect its configured cloud provider, region, environment, and infrastructure architecture."
-          theme={theme}
-        />
+      <div className="space-y-6">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+            Cloud Resources
+          </span>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+            Infrastructure Workspaces
+          </h1>
+          <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
+            Inspect configured cloud providers, target regions, environment tiers, and Terraform files.
+          </p>
+        </div>
 
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2">
           {projects.map((project) => (
-            <div key={project.id} className={`rounded-2xl border p-6 ${theme.card}`}>
-              <div className="flex items-start justify-between gap-4">
+            <div
+              key={project.id}
+              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-colors dark:border-[#1c222b] dark:bg-[#080b0f]"
+            >
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className={`text-[10px] uppercase tracking-wider ${theme.subtle}`}>
-                    Project
-                  </p>
-                  <h2 className="mt-2 text-lg font-semibold">
+                  <span className="font-mono text-xs text-slate-400 dark:text-[#525e6e]">
+                    PROJECT #{project.id}
+                  </span>
+                  <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-white">
                     {project.name}
-                  </h2>
+                  </h3>
                 </div>
-                <span className="rounded-full border border-[#63e6be]/20 bg-[#63e6be]/5 px-2.5 py-1 text-[10px] font-semibold text-[#63e6be]">
-                  ACTIVE
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 font-mono text-[9px] font-bold text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-400">
+                  CONFIGURED
                 </span>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <InfoBox label="Provider" value="AWS" theme={theme} />
-                <InfoBox label="IaC" value="Terraform" theme={theme} />
-                <InfoBox label="Environment" value="Project managed" theme={theme} />
-                <InfoBox label="Status" value="Ready" theme={theme} />
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 dark:border-[#171e27] dark:bg-[#0c1015]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                    Cloud Provider
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    AWS
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 dark:border-[#171e27] dark:bg-[#0c1015]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                    IaC Engine
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Terraform
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 dark:border-[#171e27] dark:bg-[#0c1015]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                    Target Tier
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Development
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 dark:border-[#171e27] dark:bg-[#0c1015]">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                    Approval State
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-teal-600 dark:text-teal-400">
+                    Ready
+                  </p>
+                </div>
               </div>
 
-              <div className="mt-5 flex gap-2">
+              <div className="mt-5 flex gap-2.5 pt-4 border-t border-slate-100 dark:border-[#141a22]">
                 <button
                   type="button"
                   onClick={() => openProject(project.id)}
-                  className="flex-1 rounded-lg bg-[#28d7c5] px-4 py-2.5 text-xs font-semibold text-[#07100f]"
+                  className="flex-1 rounded-lg bg-teal-600 py-2 text-center text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
                 >
-                  Manage infrastructure
+                  Manage Infrastructure
                 </button>
                 <button
                   type="button"
                   onClick={() => openTerraform(project.id)}
-                  className={`rounded-lg border px-4 py-2.5 text-xs font-semibold ${theme.muted} hover:border-[#28d7c5]/40 hover:text-[#28d7c5]`}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-[#1e2531] dark:bg-[#0e1217] dark:text-slate-300 dark:hover:bg-[#151b22]"
                 >
                   Terraform
                 </button>
@@ -791,372 +616,424 @@ function Dashboard() {
           ))}
 
           {projects.length === 0 && (
-            <EmptyState
-              title="No infrastructure workspaces"
-              description="Create a project first, then configure its cloud infrastructure."
-              action="Create project"
-              onAction={() => setShowNewProjectModal(true)}
-              theme={theme}
-            />
+            <div className="col-span-2 rounded-2xl border border-dashed border-slate-300 p-8 text-center dark:border-[#222a36]">
+              <p className="text-xs text-slate-500 dark:text-[#768597]">
+                No infrastructure workspaces available.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowNewProjectModal(true)}
+                className="mt-3 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white dark:bg-teal-500 dark:text-slate-950"
+              >
+                Create Project
+              </button>
+            </div>
           )}
         </div>
-      </>
+      </div>
     )
   }
 
+  // ----------------------------------------------------
+  // SECTION: AI INFRASTRUCTURE
+  // ----------------------------------------------------
   function renderAI() {
     return (
-      <>
-        <PageHeading
-          eyebrow="AI-powered control plane"
-          title="AI Infrastructure"
-          description="Turn natural-language infrastructure requirements into architecture and Terraform through the CloudForge approval workflow."
-          theme={theme}
-        />
+      <div className="space-y-6">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+            Intelligent Automation
+          </span>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+            AI Infrastructure Generator
+          </h1>
+          <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
+            Turn natural-language infrastructure requirements into structured cloud architecture and Terraform code.
+          </p>
+        </div>
 
-        <div className={`mt-8 rounded-2xl border p-6 ${theme.card}`}>
+        {/* Feature Hero Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition-colors dark:border-[#1c222b] dark:bg-[#080b0f]">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-2xl">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#28d7c5]/10 text-xl text-[#28d7c5]">
-                ✦
+            <div className="max-w-xl">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 ring-1 ring-teal-500/30 dark:bg-teal-400/10 dark:text-teal-400">
+                <IconAI className="h-5 w-5" />
               </div>
-              <h2 className="mt-5 text-2xl font-semibold">
-                Infrastructure Generator
+              <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">
+                Autonomous Infrastructure Synthesis
               </h2>
-              <p className={`mt-2 text-sm leading-6 ${theme.muted}`}>
-                Describe a target architecture. CloudForge AI generates a structured plan, Terraform, validation results, staging artifact, plan, and approval workflow.
+              <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-[#768597]">
+                Describe your target environment (e.g. 3-tier VPC with public/private subnets, EC2 microservices, and RDS PostgreSQL). CloudForge AI generates a verified architecture, deterministic Terraform configs, validation results, and execution plans.
               </p>
             </div>
 
-            <div className={`rounded-xl border p-5 lg:w-80 ${theme.cardStrong}`}>
-              <p className={`text-[10px] uppercase tracking-wider ${theme.subtle}`}>
-                Active project
-              </p>
-              <p className="mt-2 font-semibold">
-                {selectedProject?.name || "No project selected"}
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-5 lg:w-72 dark:border-[#171e27] dark:bg-[#0c1015]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                Active Target Project
+              </span>
+              <p className="mt-1 font-semibold text-slate-900 dark:text-white truncate">
+                {selectedProject?.name || "No workspace selected"}
               </p>
               <button
                 type="button"
                 disabled={!selectedProject}
                 onClick={openAIInfrastructure}
-                className="mt-5 w-full rounded-lg bg-[#28d7c5] px-4 py-2.5 text-sm font-semibold text-[#07100f] disabled:cursor-not-allowed disabled:opacity-40"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-40 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
               >
-                Open AI Generator →
+                <IconAI className="h-4 w-4" />
+                <span>Open AI Builder</span>
               </button>
             </div>
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        {/* Feature Highlights Grid */}
+        <div className="grid gap-4 md:grid-cols-3">
           {[
-            ["AI Architecture", "Natural language → structured cloud architecture"],
-            ["Terraform Automation", "Architecture → validated infrastructure code"],
-            ["Approval Control", "Plan → human approval before deployment"],
-          ].map(([title, detail]) => (
-            <div key={title} className={`rounded-2xl border p-5 ${theme.card}`}>
-              <p className="text-sm font-semibold">{title}</p>
-              <p className={`mt-2 text-xs leading-5 ${theme.muted}`}>
-                {detail}
+            {
+              title: "Natural Language Prompt",
+              desc: "Convert text specs into structured cloud topology without writing HCL from scratch.",
+            },
+            {
+              title: "Deterministic Terraform",
+              desc: "Modular files generated for main.tf, variables.tf, and outputs.tf ready for validation.",
+            },
+            {
+              title: "Human Approval Gate",
+              desc: "Review dry-run execution plan and approve artifacts prior to any deployment action.",
+            },
+          ].map((item, idx) => (
+            <div
+              key={idx}
+              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]"
+            >
+              <h3 className="text-xs font-semibold text-slate-900 dark:text-white">
+                {item.title}
+              </h3>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500 dark:text-[#768597]">
+                {item.desc}
               </p>
             </div>
           ))}
         </div>
-      </>
+      </div>
     )
   }
 
+  // ----------------------------------------------------
+  // SECTION: DEPLOYMENTS
+  // ----------------------------------------------------
   function renderDeployments() {
     return (
-      <>
-        <PageHeading
-          eyebrow="Infrastructure lifecycle"
-          title="Deployments"
-          description="Use the project Terraform workflow to validate, stage, plan, approve, and eventually deploy infrastructure."
-          theme={theme}
-        />
+      <div className="space-y-6">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+            Lifecycle Management
+          </span>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+            Deployments
+          </h1>
+          <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
+            Audit deployment runs, inspect staged artifacts, and review approval history.
+          </p>
+        </div>
 
-        <div className={`mt-8 rounded-2xl border p-6 ${theme.card}`}>
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        {/* Deployment Policy Notice */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-                Controlled deployment pipeline
-              </p>
-              <h2 className="mt-2 text-xl font-semibold">
-                No live deployment executed from this dashboard
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Safe Mode Policy
+              </span>
+              <h2 className="mt-0.5 text-base font-semibold text-slate-900 dark:text-white">
+                Zero Unauthorized Deployments
               </h2>
-              <p className={`mt-2 max-w-2xl text-sm leading-6 ${theme.muted}`}>
-                Real AWS deployment remains a deliberate final step. You can still fully test the local validation, staging, planning, and approval workflow.
+              <p className="mt-1 max-w-xl text-xs text-slate-500 dark:text-[#768597]">
+                Live cloud deployments require an explicitly validated and approved Terraform artifact. All staging and planning can be performed locally.
               </p>
             </div>
-
-            <span className="rounded-full border border-amber-400/20 bg-amber-400/5 px-3 py-1.5 text-xs font-semibold text-amber-300">
-              DEPLOYMENT CONTROLLED
+            <span className="self-start rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 font-mono text-[10px] font-semibold text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300">
+              POLICY ENFORCED
             </span>
-          </div>
-
-          <div className="mt-7 grid gap-3 md:grid-cols-5">
-            {[
-              ["1", "Generate"],
-              ["2", "Validate"],
-              ["3", "Stage"],
-              ["4", "Plan"],
-              ["5", "Approve"],
-            ].map(([number, title]) => (
-              <div
-                key={number}
-                className={`rounded-xl border p-4 ${theme.cardStrong}`}
-              >
-                <span className="text-xs font-bold text-[#28d7c5]">
-                  {number}
-                </span>
-                <p className="mt-2 text-sm font-semibold">{title}</p>
-              </div>
-            ))}
           </div>
         </div>
 
-        <section className="mt-8">
-          <div className="mb-4">
-            <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-              Project pipelines
-            </p>
-            <h2 className="mt-1 text-xl font-semibold">
-              Open a Terraform workflow
-            </h2>
-          </div>
+        {/* Workspaces Pipeline list */}
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+            Project Deployment Pipelines
+          </h2>
 
           <div className="grid gap-4 md:grid-cols-2">
             {projects.map((project) => (
-              <div key={project.id} className={`rounded-2xl border p-5 ${theme.card}`}>
-                <p className={`text-xs ${theme.subtle}`}>PROJECT</p>
-                <h3 className="mt-2 font-semibold">{project.name}</h3>
-                <p className={`mt-2 text-xs leading-5 ${theme.muted}`}>
-                  Open the Terraform workspace to continue the controlled lifecycle.
+              <div
+                key={project.id}
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-slate-400 dark:text-[#525e6e]">
+                    PIPELINE #{project.id}
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-500 dark:text-[#657385]">
+                    0 Active runs
+                  </span>
+                </div>
+                <h3 className="mt-1 font-semibold text-slate-900 dark:text-white">
+                  {project.name}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500 dark:text-[#768597]">
+                  Open Terraform workspace to generate plans and review approval state.
                 </p>
+
                 <button
                   type="button"
                   onClick={() => openTerraform(project.id)}
-                  className="mt-5 rounded-lg bg-[#28d7c5] px-4 py-2.5 text-xs font-semibold text-[#07100f]"
+                  className="mt-4 flex items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
                 >
-                  Open Terraform workflow →
+                  <span>Open Pipeline Workflow</span>
+                  <IconChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
 
             {projects.length === 0 && (
-              <EmptyState
-                title="No deployment pipelines"
-                description="Create a project to begin an infrastructure lifecycle."
-                action="Create project"
-                onAction={() => setShowNewProjectModal(true)}
-                theme={theme}
-              />
+              <div className="col-span-2 rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500 dark:border-[#222a36] dark:text-[#768597]">
+                No deployment pipelines configured yet. Create a project to begin.
+              </div>
             )}
           </div>
-        </section>
-      </>
+        </div>
+      </div>
     )
   }
 
+  // ----------------------------------------------------
+  // SECTION: MONITORING
+  // ----------------------------------------------------
   function renderMonitoring() {
-    const healthColor =
-      health.status === "online"
-        ? "text-[#63e6be]"
-        : health.status === "offline"
-          ? "text-red-400"
-          : health.status === "checking"
-            ? "text-amber-300"
-            : theme.muted
-
     return (
-      <>
-        <PageHeading
-          eyebrow="Operations"
-          title="Monitoring"
-          description="Monitor the local CloudForge control plane before connecting live cloud telemetry."
-          theme={theme}
-          action={
-            <button
-              type="button"
-              onClick={checkSystemHealth}
-              disabled={health.status === "checking"}
-              className={`rounded-xl border px-5 py-3 text-sm font-semibold ${theme.muted} hover:border-[#28d7c5]/40 hover:text-[#28d7c5] disabled:opacity-50`}
-            >
-              {health.status === "checking" ? "Checking..." : "↻ Refresh health"}
-            </button>
-          }
-        />
-
-        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
-            <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-              API
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+              Operations & Telemetry
+            </span>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+              Monitoring
+            </h1>
+            <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
+              Real-time health telemetry of the CloudForge control plane and backend services.
             </p>
-            <div className="mt-4 flex items-center gap-3">
+          </div>
+
+          <button
+            type="button"
+            onClick={checkSystemHealth}
+            disabled={health.status === "checking"}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-[#1e2531] dark:bg-[#0e1217] dark:text-slate-300 dark:hover:bg-[#151b22]"
+          >
+            <IconRefresh
+              className={`h-3.5 w-3.5 ${health.status === "checking" ? "animate-spin text-teal-500" : ""}`}
+            />
+            <span>{health.status === "checking" ? "Checking API..." : "Check API Health"}</span>
+          </button>
+        </div>
+
+        {/* Telemetry Cards Grid */}
+        <div className="grid gap-5 md:grid-cols-3">
+          {/* API Health Card */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+              API Health
+            </span>
+            <div className="mt-3 flex items-center gap-2.5">
               <span
                 className={`h-3 w-3 rounded-full ${
                   health.status === "online"
-                    ? "bg-[#63e6be] shadow-[0_0_12px_rgba(99,230,190,0.7)]"
+                    ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"
                     : health.status === "offline"
-                      ? "bg-red-400"
-                      : "bg-amber-300"
+                      ? "bg-red-500"
+                      : "bg-amber-400 animate-pulse"
                 }`}
               />
-              <span className={`text-lg font-semibold ${healthColor}`}>
+              <span className="text-base font-bold text-slate-900 dark:text-white">
                 {health.status === "online"
                   ? "Operational"
                   : health.status === "checking"
-                    ? "Checking"
+                    ? "Checking..."
                     : health.status === "offline"
                       ? "Offline"
-                      : "Not checked"}
+                      : "Ready"}
               </span>
             </div>
-            <p className={`mt-3 text-xs leading-5 ${theme.muted}`}>
+            <p className="mt-2 text-xs text-slate-500 dark:text-[#768597]">
               {health.message}
             </p>
             {health.checkedAt && (
-              <p className={`mt-2 text-[10px] ${theme.subtle}`}>
+              <p className="mt-3 font-mono text-[10px] text-slate-400 dark:text-[#525e6e]">
                 Last checked: {health.checkedAt}
               </p>
             )}
           </div>
 
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
-            <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-              Projects
-            </p>
-            <p className="mt-4 text-3xl font-semibold">
+          {/* Active Workspaces Card */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+              Managed Projects
+            </span>
+            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
               {projects.length}
             </p>
-            <p className={`mt-2 text-xs ${theme.muted}`}>
-              Active CloudForge workspaces
+            <p className="mt-2 text-xs text-slate-500 dark:text-[#768597]">
+              Active infrastructure workspaces registered.
             </p>
           </div>
 
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
-            <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-              AWS state
+          {/* AWS Live State Card */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+              AWS Cloud Telemetry
+            </span>
+            <p className="mt-3 text-sm font-semibold text-amber-600 dark:text-amber-400">
+              Safe-Mode Gate Active
             </p>
-            <p className="mt-4 text-lg font-semibold text-amber-300">
-              Deployment paused
-            </p>
-            <p className={`mt-2 text-xs leading-5 ${theme.muted}`}>
-              Live infrastructure monitoring will be connected after safe AWS deployment is enabled.
+            <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-[#768597]">
+              Live cloud telemetry connects upon staging an approved Terraform deployment artifact.
             </p>
           </div>
         </div>
 
-        <div className={`mt-5 rounded-2xl border p-6 ${theme.card}`}>
-          <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-            Monitoring roadmap
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Roadmap section */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+            Monitoring Integration Grid
+          </h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
             {[
-              ["API Health", "ACTIVE"],
-              ["Database", "ACTIVE"],
-              ["Prometheus", "NEXT"],
-              ["Grafana", "NEXT"],
-            ].map(([title, status]) => (
+              ["API Health Telemetry", "ACTIVE", true],
+              ["PostgreSQL Metrics", "ACTIVE", true],
+              ["Prometheus Metrics", "PLANNED", false],
+              ["Grafana Dashboards", "PLANNED", false],
+            ].map(([title, st, isActive]) => (
               <div
-                key={title}
-                className={`rounded-xl border p-4 ${theme.cardStrong}`}
+                key={String(title)}
+                className="rounded-lg border border-slate-100 bg-slate-50/50 p-3.5 dark:border-[#171e27] dark:bg-[#0c1015]"
               >
-                <p className="text-sm font-semibold">{title}</p>
-                <p
-                  className={`mt-2 text-[10px] font-bold ${
-                    status === "ACTIVE"
-                      ? "text-[#63e6be]"
-                      : "text-[#28d7c5]"
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {String(title)}
+                </p>
+                <span
+                  className={`mt-2 inline-block font-mono text-[9px] font-bold ${
+                    isActive
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-slate-400 dark:text-[#525e6e]"
                   }`}
                 >
-                  {status}
-                </p>
+                  {String(st)}
+                </span>
               </div>
             ))}
           </div>
         </div>
-      </>
+      </div>
     )
   }
 
+  // ----------------------------------------------------
+  // SECTION: SETTINGS
+  // ----------------------------------------------------
   function renderSettings() {
     return (
-      <>
-        <PageHeading
-          eyebrow="Workspace"
-          title="Settings"
-          description="Manage CloudForge appearance, session, and local control-plane preferences."
-          theme={theme}
-        />
+      <div className="max-w-3xl space-y-6">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+            System
+          </span>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+            Settings
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-[#8090a2]">
+            Configure workspace preferences, theme appearance, and authentication session.
+          </p>
+        </div>
 
-        <div className="mt-8 max-w-3xl space-y-5">
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
-            <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-              Appearance
-            </p>
-            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">
-                  {darkMode ? "Dark mode" : "Light mode"}
-                </p>
-                <p className={`mt-1 text-xs ${theme.muted}`}>
-                  Choose the control-plane appearance.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !darkMode
-                  setDarkMode(next)
-                  localStorage.setItem(
-                    "cloudforge_theme",
-                    next ? "dark" : "light"
-                  )
-                }}
-                className="rounded-lg border border-[#28d7c5]/30 bg-[#28d7c5]/5 px-4 py-2.5 text-xs font-semibold text-[#28d7c5]"
-              >
-                Switch to {darkMode ? "light" : "dark"}
-              </button>
+        {/* Theme Settings Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                Theme Appearance
+              </h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-[#768597]">
+                Active: <span className="font-semibold">{isDark ? "Dark Mode" : "Light Mode"}</span>
+              </p>
             </div>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-[#1e2531] dark:bg-[#0e1217] dark:text-slate-300 dark:hover:bg-[#151b22]"
+            >
+              Switch to {isDark ? "Light" : "Dark"} Mode
+            </button>
           </div>
+        </div>
 
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
-            <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-              Session
-            </p>
-            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">CloudForge Admin</p>
-                <p className={`mt-1 text-xs ${theme.muted}`}>
-                  Authenticated control-plane session
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={logout}
-                className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-500/10"
-              >
-                Sign out
-              </button>
+        {/* Authentication Session Card */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                Admin Session
+              </h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-[#768597]">
+                Signed in as <span className="font-mono text-slate-700 dark:text-slate-300">admin@cloudforge.com</span>
+              </p>
             </div>
-          </div>
 
-          <div className={`rounded-2xl border p-6 ${theme.card}`}>
-            <p className={`text-xs uppercase tracking-wider ${theme.subtle}`}>
-              Environment
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <InfoBox label="Frontend" value="Vite :5173" theme={theme} />
-              <InfoBox label="Backend" value="FastAPI :8000" theme={theme} />
-              <InfoBox label="Database" value="PostgreSQL" theme={theme} />
-              <InfoBox label="AI Runtime" value="Ollama" theme={theme} />
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-lg border border-red-500/20 bg-red-500/10 px-3.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-500/20 dark:text-red-400"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* Runtime specs */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+            Environment Specifications
+          </h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+              <span className="text-slate-400 dark:text-[#525e6e]">Frontend Client</span>
+              <p className="mt-0.5 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                React 19 • Vite • Tailwind v4
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+              <span className="text-slate-400 dark:text-[#525e6e]">Control Plane API</span>
+              <p className="mt-0.5 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                FastAPI :8000
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+              <span className="text-slate-400 dark:text-[#525e6e]">Persistence Engine</span>
+              <p className="mt-0.5 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                PostgreSQL
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-xs dark:border-[#171e27] dark:bg-[#0c1015]">
+              <span className="text-slate-400 dark:text-[#525e6e]">AI Runtime</span>
+              <p className="mt-0.5 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                Ollama Local LLM
+              </p>
             </div>
           </div>
         </div>
-      </>
+      </div>
     )
   }
 
@@ -1181,30 +1058,30 @@ function Dashboard() {
   }
 
   return (
-    <div className={`min-h-screen ${theme.page}`}>
-      {renderHeader()}
-
-      {mobileMenuOpen && (
-        <>
-          <button
-            type="button"
-            aria-label="Close navigation"
-            onClick={() => setMobileMenuOpen(false)}
-            className="fixed inset-0 z-40 bg-black/60 lg:hidden"
-          />
-          <div className="lg:hidden">
-            {renderSidebar(true)}
-          </div>
-        </>
-      )}
+    <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-[#030507] dark:text-slate-100">
+      <Navbar
+        onMenuToggle={() => setMobileMenuOpen(true)}
+        healthStatus={health.status}
+        breadcrumbs={[
+          { label: "Console", onClick: () => openSection("overview") },
+          { label: activeSection.charAt(0).toUpperCase() + activeSection.slice(1) },
+        ]}
+      />
 
       <div className="flex">
-        {renderSidebar()}
+        <Sidebar
+          activeSection={activeSection}
+          onSelectSection={openSection}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          mobileOpen={mobileMenuOpen}
+          onCloseMobile={() => setMobileMenuOpen(false)}
+          onLogout={logout}
+          projectCount={projects.length}
+        />
 
-        <main className="min-w-0 flex-1">
-          <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
-            {renderActiveSection()}
-          </div>
+        <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
+          <div className="mx-auto max-w-6xl">{renderActiveSection()}</div>
         </main>
       </div>
 
@@ -1212,10 +1089,7 @@ function Dashboard() {
         <NewProjectModal
           onClose={() => setShowNewProjectModal(false)}
           onProjectCreated={(newProject) => {
-            setProjects((currentProjects) => [
-              newProject,
-              ...currentProjects,
-            ])
+            setProjects((curr) => [newProject, ...curr])
             setShowNewProjectModal(false)
           }}
         />
@@ -1224,131 +1098,37 @@ function Dashboard() {
   )
 }
 
-interface Theme {
-  page: string
-  header: string
-  sidebar: string
-  card: string
-  cardStrong: string
-  muted: string
-  subtle: string
-  hover: string
-  input: string
-}
-
 function MetricCard({
   label,
   value,
   detail,
   icon,
-  success = false,
-  theme,
+  statusSuccess = false,
 }: {
   label: string
   value: string
   detail: string
-  icon: string
-  success?: boolean
-  theme: Theme
+  icon: ReactNode
+  statusSuccess?: boolean
 }) {
   return (
-    <div className={`rounded-2xl border p-5 ${theme.card}`}>
-      <div className="flex items-start justify-between gap-4">
-        <p className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${theme.subtle}`}>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors dark:border-[#1c222b] dark:bg-[#080b0f]">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
           {label}
-        </p>
-        <span
-          className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-            success
-              ? "bg-[#63e6be]/10 text-[#63e6be]"
-              : "bg-[#28d7c5]/8 text-[#28d7c5]"
-          }`}
-        >
-          {icon}
         </span>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 ring-1 ring-slate-100 dark:bg-[#0e1217] dark:ring-[#171e27]">
+          {icon}
+        </div>
       </div>
-      <p className={`mt-5 text-3xl font-semibold ${success ? "text-[#63e6be]" : ""}`}>
+      <p
+        className={`mt-4 text-2xl font-bold tracking-tight ${
+          statusSuccess ? "text-emerald-600 dark:text-emerald-400" : "text-slate-900 dark:text-white"
+        }`}
+      >
         {value}
       </p>
-      <p className={`mt-2 text-xs ${theme.muted}`}>{detail}</p>
-    </div>
-  )
-}
-
-function PageHeading({
-  eyebrow,
-  title,
-  description,
-  theme,
-  action,
-}: {
-  eyebrow: string
-  title: string
-  description: string
-  theme: Theme
-  action?: ReactNode
-}) {
-  return (
-    <section className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#28d7c5]">
-          {eyebrow}
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-          {title}
-        </h1>
-        <p className={`mt-2 max-w-3xl text-sm leading-6 ${theme.muted}`}>
-          {description}
-        </p>
-      </div>
-      {action}
-    </section>
-  )
-}
-
-function InfoBox({
-  label,
-  value,
-  theme,
-}: {
-  label: string
-  value: string
-  theme: Theme
-}) {
-  return (
-    <div className={`rounded-xl border p-4 ${theme.cardStrong}`}>
-      <p className={`text-[10px] uppercase tracking-wider ${theme.subtle}`}>
-        {label}
-      </p>
-      <p className="mt-2 text-sm font-semibold">{value}</p>
-    </div>
-  )
-}
-
-function EmptyState({
-  title,
-  description,
-  action,
-  onAction,
-  theme,
-}: {
-  title: string
-  description: string
-  action: string
-  onAction: () => void
-  theme: Theme
-}) {
-  return (
-    <div className={`rounded-2xl border p-8 ${theme.card}`}>
-      <p className="font-semibold">{title}</p>
-      <p className={`mt-2 text-sm ${theme.muted}`}>{description}</p>
-      <button
-        type="button"
-        onClick={onAction}
-        className="mt-5 rounded-lg bg-[#28d7c5] px-4 py-2.5 text-xs font-semibold text-[#07100f]"
-      >
-        {action}
-      </button>
+      <p className="mt-1 truncate text-xs text-slate-400 dark:text-[#6c7b8d]">{detail}</p>
     </div>
   )
 }

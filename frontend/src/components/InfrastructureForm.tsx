@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react"
-
+import { useState } from "react"
 import {
   createInfrastructure,
   updateInfrastructure,
 } from "../services/api"
-
+import { IconAlertCircle, IconChevronDown } from "./Icons"
 
 interface Infrastructure {
   id: number
@@ -16,7 +15,6 @@ interface Infrastructure {
   created_at: string
 }
 
-
 interface InfrastructureFormProps {
   projectId: number
   existingInfrastructure?: Infrastructure | null
@@ -24,104 +22,40 @@ interface InfrastructureFormProps {
   onCancel: () => void
 }
 
-
 function InfrastructureForm({
   projectId,
   existingInfrastructure,
   onSaved,
   onCancel,
 }: InfrastructureFormProps) {
+  const [cloudProvider, setCloudProvider] = useState(
+    () => existingInfrastructure?.cloud_provider ?? "AWS"
+  )
+  const [region, setRegion] = useState(
+    () => existingInfrastructure?.region ?? "ap-south-1"
+  )
+  const [environment, setEnvironment] = useState(
+    () => existingInfrastructure?.environment ?? "development"
+  )
+  const [architecture, setArchitecture] = useState(
+    () => existingInfrastructure?.architecture ?? ""
+  )
 
-  // ========================================
-  // Form State
-  // ========================================
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const [cloudProvider, setCloudProvider] =
-    useState("AWS")
+  const isEditMode = !!existingInfrastructure
 
-  const [region, setRegion] =
-    useState("ap-south-1")
-
-  const [environment, setEnvironment] =
-    useState("development")
-
-  const [architecture, setArchitecture] =
-    useState("")
-
-
-  // ========================================
-  // UI State
-  // ========================================
-
-  const [loading, setLoading] =
-    useState(false)
-
-  const [error, setError] =
-    useState("")
-
-
-  // ========================================
-  // Detect Create / Edit Mode
-  // ========================================
-
-  const isEditMode =
-    !!existingInfrastructure
-
-
-  // ========================================
-  // Load Existing Infrastructure
-  // ========================================
-
-  useEffect(() => {
-
-    if (!existingInfrastructure) {
-      return
-    }
-
-    setCloudProvider(
-      existingInfrastructure.cloud_provider
-    )
-
-    setRegion(
-      existingInfrastructure.region
-    )
-
-    setEnvironment(
-      existingInfrastructure.environment
-    )
-
-    setArchitecture(
-      existingInfrastructure.architecture || ""
-    )
-
-  }, [existingInfrastructure])
-
-
-  // ========================================
-  // Submit Form
-  // ========================================
-
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     try {
-
       setLoading(true)
       setError("")
 
-
-      let data
-
-
-      // ====================================
-      // Update Existing Infrastructure
-      // ====================================
+      let data: Infrastructure
 
       if (isEditMode) {
-
         data = await updateInfrastructure(
           projectId,
           cloudProvider,
@@ -129,15 +63,7 @@ function InfrastructureForm({
           environment,
           architecture.trim()
         )
-
-      }
-
-      // ====================================
-      // Create New Infrastructure
-      // ====================================
-
-      else {
-
+      } else {
         data = await createInfrastructure(
           projectId,
           cloudProvider,
@@ -145,310 +71,180 @@ function InfrastructureForm({
           environment,
           architecture.trim()
         )
-
       }
 
-
-      // Send saved data to parent
-
       onSaved(data)
-
-
-    } catch (error) {
-
-      if (error instanceof Error) {
-
-        setError(error.message)
-
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
       } else {
-
         setError(
           isEditMode
             ? "Failed to update infrastructure"
             : "Failed to create infrastructure"
         )
-
       }
-
     } finally {
-
       setLoading(false)
-
     }
-
   }
 
-
-  // ========================================
-  // UI
-  // ========================================
-
   return (
-
-    <div
-      className="rounded-xl border border-[#263035] bg-[#121619] p-6"
-    >
-
-      {/* ==================================
-          Header
-      ================================== */}
-
-      <div className="mb-6">
-
-        <h2 className="text-xl font-semibold text-[#f3f7f6]">
-
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-[#1e2531] dark:bg-[#090c10]">
+      {/* Header */}
+      <div className="border-b border-slate-200/90 px-6 py-4 dark:border-[#181f29]">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
+              Cloud Configuration
+            </span>
+            <h2 className="mt-0.5 text-lg font-semibold text-slate-900 dark:text-white">
+              {isEditMode ? "Manage Infrastructure Spec" : "Configure Cloud Infrastructure"}
+            </h2>
+          </div>
+          <span className="rounded-full border border-teal-500/20 bg-teal-500/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-teal-600 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
+            {isEditMode ? "UPDATE MODE" : "NEW SPEC"}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-slate-500 dark:text-[#768597]">
           {isEditMode
-            ? "Manage Infrastructure"
-            : "Configure Infrastructure"}
-
-        </h2>
-
-
-        <p className="mt-1 text-sm text-[#8a9997]">
-
-          {isEditMode
-            ? "Update the cloud infrastructure configuration for this project."
-            : "Define the initial cloud infrastructure for this project."}
-
+            ? "Update the cloud provider, target region, environment tier, and architecture specification."
+            : "Define the cloud environment targets and high-level architecture before generating Terraform."}
         </p>
-
       </div>
 
-
-      {/* ==================================
-          Form
-      ================================== */}
-
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-5"
-      >
-
-
-        {/* ==================================
-            Cloud Provider
-        ================================== */}
-
-        <div>
-
-          <label
-            htmlFor="cloud-provider"
-            className="mb-2 block text-sm font-medium text-[#f3f7f6]"
-          >
-            Cloud Provider
-          </label>
-
-
-          <select
-            id="cloud-provider"
-            value={cloudProvider}
-            onChange={(event) =>
-              setCloudProvider(
-                event.target.value
-              )
-            }
-            className="w-full rounded-lg border border-[#263035] bg-[#0b0d0f] px-3 py-2.5 text-sm text-[#f3f7f6] outline-none focus:border-[#28d7c5]"
-          >
-
-            <option value="AWS">
-              Amazon Web Services (AWS)
-            </option>
-
-            <option value="Azure">
-              Microsoft Azure
-            </option>
-
-            <option value="GCP">
-              Google Cloud Platform (GCP)
-            </option>
-
-          </select>
-
-        </div>
-
-
-        {/* ==================================
-            Region
-        ================================== */}
-
-        <div>
-
-          <label
-            htmlFor="region"
-            className="mb-2 block text-sm font-medium text-[#f3f7f6]"
-          >
-            Region
-          </label>
-
-
-          <select
-            id="region"
-            value={region}
-            onChange={(event) =>
-              setRegion(
-                event.target.value
-              )
-            }
-            className="w-full rounded-lg border border-[#263035] bg-[#0b0d0f] px-3 py-2.5 text-sm text-[#f3f7f6] outline-none focus:border-[#28d7c5]"
-          >
-
-            <option value="ap-south-1">
-              Asia Pacific (Mumbai) — ap-south-1
-            </option>
-
-            <option value="us-east-1">
-              US East (N. Virginia) — us-east-1
-            </option>
-
-            <option value="us-west-2">
-              US West (Oregon) — us-west-2
-            </option>
-
-            <option value="eu-west-1">
-              Europe (Ireland) — eu-west-1
-            </option>
-
-          </select>
-
-        </div>
-
-
-        {/* ==================================
-            Environment
-        ================================== */}
-
-        <div>
-
-          <label
-            htmlFor="environment"
-            className="mb-2 block text-sm font-medium text-[#f3f7f6]"
-          >
-            Environment
-          </label>
-
-
-          <select
-            id="environment"
-            value={environment}
-            onChange={(event) =>
-              setEnvironment(
-                event.target.value
-              )
-            }
-            className="w-full rounded-lg border border-[#263035] bg-[#0b0d0f] px-3 py-2.5 text-sm text-[#f3f7f6] outline-none focus:border-[#28d7c5]"
-          >
-
-            <option value="development">
-              Development
-            </option>
-
-            <option value="staging">
-              Staging
-            </option>
-
-            <option value="production">
-              Production
-            </option>
-
-          </select>
-
-        </div>
-
-
-        {/* ==================================
-            Architecture
-        ================================== */}
-
-        <div>
-
-          <label
-            htmlFor="architecture"
-            className="mb-2 block text-sm font-medium text-[#f3f7f6]"
-          >
-            Architecture Description
-          </label>
-
-
-          <textarea
-            id="architecture"
-            value={architecture}
-            onChange={(event) =>
-              setArchitecture(
-                event.target.value
-              )
-            }
-            placeholder="Describe the infrastructure you want to build..."
-            rows={5}
-            className="w-full resize-none rounded-lg border border-[#263035] bg-[#0b0d0f] px-3 py-2.5 text-sm text-[#f3f7f6] outline-none placeholder:text-[#53605f] focus:border-[#28d7c5]"
-          />
-
-
-          <p className="mt-2 text-xs text-[#53605f]">
-
-            Example: A VPC with public and private
-            subnets, an EC2 application server, and
-            an RDS PostgreSQL database.
-
-          </p>
-
-        </div>
-
-
-        {/* ==================================
-            Error
-        ================================== */}
-
-        {error && (
-
-          <div
-            className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5 text-sm text-red-400"
-          >
-            {error}
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <div className="grid gap-5 sm:grid-cols-3">
+          {/* Cloud Provider */}
+          <div>
+            <label
+              htmlFor="cloud-provider"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
+            >
+              Provider
+            </label>
+            <div className="relative">
+              <select
+                id="cloud-provider"
+                value={cloudProvider}
+                onChange={(e) => setCloudProvider(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-900 outline-none transition focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-[#222a36] dark:bg-[#06080b] dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-400/30"
+              >
+                <option value="AWS">Amazon Web Services (AWS)</option>
+                <option value="Azure">Microsoft Azure</option>
+                <option value="GCP">Google Cloud Platform (GCP)</option>
+              </select>
+              <IconChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-400" />
+            </div>
           </div>
 
+          {/* Region */}
+          <div>
+            <label
+              htmlFor="region"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
+            >
+              Target Region
+            </label>
+            <div className="relative">
+              <select
+                id="region"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-xs font-medium text-slate-900 outline-none transition focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-[#222a36] dark:bg-[#06080b] dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-400/30"
+              >
+                <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                <option value="us-west-2">us-west-2 (Oregon)</option>
+                <option value="eu-west-1">eu-west-1 (Ireland)</option>
+              </select>
+              <IconChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-400" />
+            </div>
+          </div>
+
+          {/* Environment */}
+          <div>
+            <label
+              htmlFor="environment"
+              className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
+            >
+              Environment Tier
+            </label>
+            <div className="relative">
+              <select
+                id="environment"
+                value={environment}
+                onChange={(e) => setEnvironment(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-xs font-medium text-slate-900 outline-none transition focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-[#222a36] dark:bg-[#06080b] dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-400/30"
+              >
+                <option value="development">Development</option>
+                <option value="staging">Staging</option>
+                <option value="production">Production</option>
+              </select>
+              <IconChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-400" />
+            </div>
+          </div>
+        </div>
+
+        {/* Architecture Description */}
+        <div>
+          <label
+            htmlFor="architecture"
+            className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
+          >
+            Architecture Specification
+          </label>
+          <textarea
+            id="architecture"
+            rows={4}
+            value={architecture}
+            onChange={(e) => setArchitecture(e.target.value)}
+            placeholder="e.g. AWS VPC with public and private subnets, EC2 micro services, and RDS PostgreSQL database."
+            className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-xs leading-relaxed text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-[#222a36] dark:bg-[#06080b] dark:text-slate-100 dark:placeholder:text-[#424e5e] dark:focus:border-teal-400 dark:focus:ring-teal-400/30"
+          />
+          <p className="mt-1.5 text-[11px] text-slate-400 dark:text-[#525e6e]">
+            Detail components like VPC, subnets, EC2 compute sizing, and managed RDS databases.
+          </p>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-600 dark:text-red-400">
+            <IconAlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
         )}
 
-
-        {/* ==================================
-            Buttons
-        ================================== */}
-
-        <div className="flex justify-end gap-3 pt-2">
-
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200/90 dark:border-[#181f29]">
           <button
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="rounded-lg border border-[#263035] px-4 py-2.5 text-sm font-medium text-[#8a9997] transition hover:border-[#53605f] hover:text-[#f3f7f6] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 dark:border-[#222a36] dark:bg-[#0e1217] dark:text-slate-300 dark:hover:bg-[#151b22]"
           >
             Cancel
           </button>
 
-
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-[#28d7c5] px-5 py-2.5 text-sm font-semibold text-[#0b0d0f] transition hover:bg-[#63e6be] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
           >
-
-            {loading
-              ? isEditMode
-                ? "Updating..."
-                : "Saving..."
-              : isEditMode
-                ? "Save Changes"
-                : "Save Infrastructure"}
-
+            {loading ? (
+              <>
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <span>Saving specification...</span>
+              </>
+            ) : (
+              <span>{isEditMode ? "Save Changes" : "Save Infrastructure Spec"}</span>
+            )}
           </button>
-
         </div>
-
       </form>
-
     </div>
-
   )
 }
-
 
 export default InfrastructureForm
