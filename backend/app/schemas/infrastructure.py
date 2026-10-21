@@ -12,9 +12,9 @@ class InfrastructureCreate(BaseModel):
 
 
 class InfrastructureUpdate(BaseModel):
-    cloud_provider: str
-    region: str
-    environment: str
+    cloud_provider: str | None = None
+    region: str | None = None
+    environment: str | None = None
     architecture: str | None = None
 
 

@@ -152,21 +152,14 @@ def update_infrastructure(
             detail="Infrastructure configuration not found",
         )
 
-    infrastructure.cloud_provider = (
-        infrastructure_data.cloud_provider
-    )
-
-    infrastructure.region = (
-        infrastructure_data.region
-    )
-
-    infrastructure.environment = (
-        infrastructure_data.environment
-    )
-
-    infrastructure.architecture = (
-        infrastructure_data.architecture
-    )
+    if infrastructure_data.cloud_provider is not None:
+        infrastructure.cloud_provider = infrastructure_data.cloud_provider
+    if infrastructure_data.region is not None:
+        infrastructure.region = infrastructure_data.region
+    if infrastructure_data.environment is not None:
+        infrastructure.environment = infrastructure_data.environment
+    if infrastructure_data.architecture is not None:
+        infrastructure.architecture = infrastructure_data.architecture
 
     db.commit()
     db.refresh(infrastructure)

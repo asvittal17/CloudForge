@@ -1,4 +1,5 @@
 import json
+
 import requests
 
 
@@ -64,17 +65,22 @@ Rules:
 """
 
 
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json",
-        },
-        timeout=120,
-    )
-
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+            },
+            timeout=120,
+        )
+    except requests.ConnectionError as error:
+        raise ConnectionError(
+            "Unable to connect to Ollama at "
+            f"{OLLAMA_URL}. Ensure Ollama is running."
+        ) from error
 
     response.raise_for_status()
 

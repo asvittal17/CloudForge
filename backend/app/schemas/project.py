@@ -9,7 +9,7 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    name: str
+    name: str | None = None
     description: str | None = None
 
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -29,6 +29,22 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(
         String(255),
         nullable=False
+    )
+
+    # "user" or "admin". Server-verified role used for the Admin Console.
+    # Existing rows are migrated to "user" by scripts/migrate_multiuser.py.
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="user",
+        index=True
+    )
+
+    # Soft-disable switch. Disabled users cannot authenticate.
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True
     )
 
     created_at: Mapped[datetime] = mapped_column(

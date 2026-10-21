@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
 import {
+  API_BASE_URL,
   approveTerraform,
   applyTerraform,
   generateAITerraform,
@@ -15,16 +16,17 @@ import type { WorkflowStepId } from "../components/WorkflowStepper"
 import {
   IconArrowLeft,
   IconAI,
+  IconCheck,
   IconCheckCircle,
   IconAlertCircle,
+  IconAlertTriangle,
   IconPlay,
   IconShield,
   IconNetwork,
   IconServer,
   IconDatabase,
+  IconTerminal,
 } from "../components/Icons"
-
-const API_BASE_URL = "http://localhost:8000"
 
 interface InfrastructurePlan {
   cloud_provider: string
@@ -107,12 +109,208 @@ interface TerraformDeploymentResult {
   apply_error: string
 }
 
+type BannerTone = "error" | "success" | "warning" | "info"
+
+const bannerStyles: Record<BannerTone, string> = {
+  error:
+    "border-red-500/25 bg-red-500/10 text-red-600 dark:border-red-500/30 dark:text-red-400",
+  success:
+    "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:border-emerald-500/30 dark:text-emerald-400",
+  warning:
+    "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:border-amber-500/30 dark:text-amber-300",
+  info:
+    "border-teal-500/25 bg-teal-500/10 text-teal-700 dark:border-teal-500/30 dark:text-teal-300",
+}
+
+function Spinner({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <span
+      className={`animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
+    />
+  )
+}
+
+function Banner({
+  tone,
+  icon,
+  children,
+}: {
+  tone: BannerTone
+  icon?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      role={tone === "error" || tone === "warning" ? "alert" : undefined}
+      className={`flex items-start gap-2.5 rounded-xl border p-3.5 text-xs leading-relaxed ${bannerStyles[tone]}`}
+    >
+      <span className="mt-px shrink-0">{icon}</span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  )
+}
+
+function StatusPill({
+  tone,
+  children,
+}: {
+  tone: BannerTone
+  children: React.ReactNode
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[9px] font-bold tracking-wide ${bannerStyles[tone]}`}
+    >
+      {children}
+    </span>
+  )
+}
+
+function TierCard({
+  icon,
+  title,
+  caption,
+  children,
+}: {
+  icon: React.ReactNode
+  title: string
+  caption: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="group rounded-2xl border border-slate-200/80 bg-slate-50/40 p-5 transition-colors hover:border-teal-500/30 hover:bg-white dark:border-[#171e27] dark:bg-[#0c1015] dark:hover:border-teal-400/30 dark:hover:bg-[#0e1319]">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-teal-500/20 bg-teal-500/10 text-teal-500 dark:border-teal-400/20 dark:text-teal-400">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {title}
+          </p>
+          <p className="text-[11px] text-slate-400 dark:text-[#5b6779]">
+            {caption}
+          </p>
+        </div>
+      </div>
+      <dl className="mt-4 divide-y divide-slate-100 dark:divide-[#161d26]">
+        {children}
+      </dl>
+    </div>
+  )
+}
+
+function TierRow({
+  label,
+  value,
+  mono = true,
+}: {
+  label: string
+  value: React.ReactNode
+  mono?: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+      <dt className="text-[11px] font-medium text-slate-400 dark:text-[#657385]">
+        {label}
+      </dt>
+      <dd
+        className={`truncate text-xs font-semibold text-slate-800 dark:text-slate-100 ${
+          mono ? "font-mono" : ""
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+function StepHeader({
+  index,
+  kicker,
+  title,
+  description,
+  children,
+}: {
+  index: string
+  kicker: string
+  title: string
+  description: string
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-teal-500/20 bg-teal-500/10 font-mono text-[10px] font-bold text-teal-600 dark:border-teal-400/20 dark:text-teal-400">
+          {index}
+        </span>
+        <div className="min-w-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+            {kicker}
+          </span>
+          <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">
+            {title}
+          </h3>
+          <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-[#768597]">
+            {description}
+          </p>
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ActionButton({
+  onClick,
+  disabled,
+  loading,
+  loadingLabel,
+  idleLabel,
+  idleIcon,
+  variant = "primary",
+}: {
+  onClick: () => void
+  disabled?: boolean
+  loading?: boolean
+  loadingLabel: string
+  idleLabel: React.ReactNode
+  idleIcon?: React.ReactNode
+  variant?: "primary" | "outline"
+}) {
+  const base =
+    "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 focus:ring-offset-white dark:focus:ring-offset-[#080b0f]"
+  const primary =
+    "bg-teal-600 text-white shadow-sm hover:bg-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
+  const outline =
+    "border border-teal-500/30 bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 dark:border-teal-400/30 dark:text-teal-300 dark:hover:bg-teal-400/20"
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`${base} ${variant === "primary" ? primary : outline}`}
+    >
+      {loading ? (
+        <>
+          <Spinner />
+          <span>{loadingLabel}</span>
+        </>
+      ) : (
+        <>
+          {idleIcon}
+          {idleLabel}
+        </>
+      )}
+    </button>
+  )
+}
+
 function AIInfrastructure() {
   const navigate = useNavigate()
   const { projectId } = useParams()
   const numericProjectId = Number(projectId)
 
-  // State
   const [request, setRequest] = useState("")
   const [plan, setPlan] = useState<InfrastructurePlan | null>(null)
   const [terraform, setTerraform] = useState<TerraformResult | null>(null)
@@ -142,7 +340,6 @@ function AIInfrastructure() {
   const [activeFile, setActiveFile] = useState<"main.tf" | "variables.tf" | "outputs.tf">("main.tf")
   const [showRawJson, setShowRawJson] = useState(false)
 
-  // Generate Architecture
   async function handleGenerate() {
     if (!request.trim()) {
       setError("Please describe the infrastructure you want to create.")
@@ -191,7 +388,6 @@ function AIInfrastructure() {
     }
   }
 
-  // Generate Terraform
   async function handleGenerateTerraform() {
     if (!plan) return
 
@@ -228,7 +424,6 @@ function AIInfrastructure() {
     }
   }
 
-  // Validate Terraform
   async function handleValidateTerraform() {
     if (!terraform) return
 
@@ -271,7 +466,6 @@ function AIInfrastructure() {
     }
   }
 
-  // Stage Terraform
   async function handleStageTerraform() {
     if (!terraform) return
     if (!numericProjectId) {
@@ -309,7 +503,6 @@ function AIInfrastructure() {
     }
   }
 
-  // Plan Terraform
   async function handleGenerateTerraformPlan() {
     if (!numericProjectId) {
       setTerraformPlanError("Invalid project ID.")
@@ -338,7 +531,6 @@ function AIInfrastructure() {
     }
   }
 
-  // Approve Terraform
   async function handleApproveTerraform() {
     if (!numericProjectId) {
       setApprovalError("Invalid project ID.")
@@ -371,7 +563,6 @@ function AIInfrastructure() {
     }
   }
 
-  // Deploy Terraform
   async function handleDeployTerraform() {
     if (!numericProjectId) {
       setDeploymentError("Invalid project ID.")
@@ -408,7 +599,6 @@ function AIInfrastructure() {
     }
   }
 
-  // Calculate current workflow step
   const currentStep: WorkflowStepId = deploymentResult
     ? "deploy"
     : approvalResult?.status === "approved"
@@ -431,6 +621,18 @@ function AIInfrastructure() {
   if (approvalResult?.status === "approved") completedSteps.push("approve")
   if (deploymentResult?.success) completedSteps.push("deploy")
 
+  const publicSubnets = plan?.architecture.network.public_subnets ?? 0
+  const privateSubnets = plan?.architecture.network.private_subnets ?? 0
+  const subnetTotal = publicSubnets + privateSubnets || 1
+  const publicPct = Math.round((publicSubnets / subnetTotal) * 100)
+  const privatePct = 100 - publicPct
+
+  const templates = [
+    "3-tier AWS web app with VPC and RDS PostgreSQL",
+    "Serverless REST API with DynamoDB & public subnet",
+    "Production Docker container cluster with private VPC",
+  ]
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-[#030507] dark:text-slate-100">
       <Navbar
@@ -442,17 +644,53 @@ function AIInfrastructure() {
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Back Link */}
         <button
           type="button"
           onClick={() => navigate(`/projects/${projectId}`)}
-          className="mb-6 flex items-center gap-1.5 text-xs font-medium text-slate-500 transition hover:text-slate-900 dark:text-[#768597] dark:hover:text-slate-200"
+          className="mb-6 inline-flex items-center gap-1.5 rounded-md px-1 text-xs font-medium text-slate-500 transition hover:text-teal-600 dark:text-[#768597] dark:hover:text-teal-300"
         >
           <IconArrowLeft className="h-3.5 w-3.5" />
           <span>Back to Project Workspace</span>
         </button>
 
-        {/* Workflow Stepper */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/25 bg-teal-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:border-teal-400/25 dark:text-teal-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
+                Autonomous Cloud Ops
+              </span>
+              <span className="hidden items-center gap-1.5 font-mono text-[11px] text-slate-400 sm:inline-flex dark:text-[#5b6779]">
+                <IconTerminal className="h-3 w-3" />
+                Natural Language → IaC
+              </span>
+            </div>
+            <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
+              AI Infrastructure Builder
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500 dark:text-[#8090a2]">
+              Describe your desired cloud architecture in plain language. CloudForge AI
+              synthesizes a verified topology, outputs production-ready Terraform, and guides
+              the controlled stage → plan → approve pipeline to deployment.
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center dark:border-[#1c222b] dark:bg-[#080b0f]">
+              <p className="font-mono text-sm font-bold text-slate-900 dark:text-white">06</p>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#5b6779]">
+                Pipeline
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center dark:border-[#1c222b] dark:bg-[#080b0f]">
+              <p className="font-mono text-sm font-bold text-slate-900 dark:text-white">Ollama</p>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#5b6779]">
+                Engine
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="mb-8">
           <WorkflowStepper
             currentStep={currentStep}
@@ -460,273 +698,243 @@ function AIInfrastructure() {
           />
         </div>
 
-        {/* Page Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">
-              Autonomous Cloud Ops
-            </span>
-            <span className="text-slate-300 dark:text-[#232b36]">•</span>
-            <span className="font-mono text-xs text-slate-500 dark:text-[#657385]">
-              Natural Language to IaC
-            </span>
-          </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-white">
-            AI Infrastructure Builder
-          </h1>
-          <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-[#8090a2]">
-            Describe desired cloud architecture in plain language. CloudForge AI generates verified topology, outputs production-ready Terraform, and coordinates the controlled stage-plan-approve pipeline.
-          </p>
-        </div>
-
-        {/* Prompt Card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-colors dark:border-[#1c222b] dark:bg-[#080b0f]">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
-                Step 1: Architecture Prompt
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                <span className="h-1 w-1 rounded-full bg-teal-500" />
+                Step 1 · Architecture Prompt
               </span>
-              <h2 className="mt-0.5 text-base font-semibold text-slate-900 dark:text-white">
+              <h2 className="mt-1.5 text-base font-semibold text-slate-900 dark:text-white">
                 Describe Target Architecture
               </h2>
             </div>
-            <span className="flex items-center gap-1 rounded-full border border-teal-500/20 bg-teal-500/10 px-2.5 py-0.5 font-mono text-[9px] font-bold text-teal-600 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-teal-500/20 bg-teal-500/10 px-2.5 py-1 font-mono text-[9px] font-bold text-teal-600 dark:border-teal-400/20 dark:text-teal-300">
               <IconAI className="h-3 w-3" />
-              <span>OLLAMA ENGINE</span>
+              <span>Ollama Engine</span>
             </span>
           </div>
 
-          {/* Quick Example Chips */}
+          <div className="mt-5">
+            <div className="flex items-center gap-2 overflow-hidden rounded-xl border border-slate-300 bg-white transition focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/20 dark:border-[#222a36] dark:bg-[#05070a] dark:focus-within:border-teal-400 dark:focus-within:ring-teal-400/20">
+              <textarea
+                value={request}
+                onChange={(e) => setRequest(e.target.value)}
+                rows={4}
+                spellCheck={false}
+                placeholder="e.g. Create an AWS infrastructure for a high-availability Node.js backend with an RDS PostgreSQL database and a private VPC subnet."
+                className="min-h-[104px] w-full resize-none bg-transparent p-4 text-sm leading-relaxed text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-[#424e5e]"
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-400 dark:text-[#525e6e]">
+                Be specific about provider, region, tiers, and networking for best results.
+              </span>
+              <span className="shrink-0 font-mono text-[10px] tabular-nums text-slate-400 dark:text-[#525e6e]">
+                {request.length.toLocaleString()} chars
+              </span>
+            </div>
+          </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-slate-400 dark:text-[#525e6e]">
-              Try template:
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 dark:text-[#525e6e]">
+              <IconAI className="h-3.5 w-3.5 text-teal-500" />
+              Try a template
             </span>
-            {[
-              "3-tier AWS web app with VPC and RDS PostgreSQL",
-              "Serverless REST API with DynamoDB & public subnet",
-              "Production Docker container cluster with private VPC",
-            ].map((template) => (
+            {templates.map((template) => (
               <button
                 key={template}
                 type="button"
                 onClick={() => setRequest(template)}
-                className="rounded-md border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-[11px] text-slate-600 transition hover:border-teal-500/40 hover:bg-slate-100 hover:text-teal-700 dark:border-[#1e2531] dark:bg-[#0d1117] dark:text-[#768597] dark:hover:border-teal-400/40 dark:hover:text-teal-300"
+                className="group inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5 text-[11px] text-slate-600 transition hover:border-teal-500/40 hover:bg-teal-500/5 hover:text-teal-700 dark:border-[#1e2531] dark:bg-[#0d1117] dark:text-[#768597] dark:hover:border-teal-400/40 dark:hover:text-teal-300"
               >
-                {template}
+                <span className="h-1 w-1 shrink-0 rounded-full bg-slate-300 transition group-hover:bg-teal-500 dark:bg-[#33404f]" />
+                <span className="truncate">{template}</span>
               </button>
             ))}
           </div>
 
-          <textarea
-            value={request}
-            onChange={(e) => setRequest(e.target.value)}
-            rows={4}
-            placeholder="e.g. Create an AWS infrastructure for a high-availability Node.js backend with an RDS PostgreSQL database and a private VPC subnet."
-            className="mt-4 w-full resize-none rounded-xl border border-slate-300 bg-white p-4 text-xs leading-relaxed text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-[#222a36] dark:bg-[#05070a] dark:text-slate-100 dark:placeholder:text-[#424e5e] dark:focus:border-teal-400 dark:focus:ring-teal-400/30"
-          />
-
           {error && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-              <IconAlertCircle className="h-4 w-4 shrink-0" />
-              <span>{error}</span>
+            <div className="mt-5">
+              <Banner tone="error" icon={<IconAlertCircle className="h-4 w-4" />}>
+                {error}
+              </Banner>
             </div>
           )}
 
-          <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-[#141a22]">
-            <span className="text-[11px] text-slate-400 dark:text-[#525e6e]">
-              Press generate to synthesize architecture model
-            </span>
+          <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between dark:border-[#141a22]">
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-[#525e6e]">
+              <IconCheck className="h-3.5 w-3.5 text-teal-500" />
+              <span>Synthesize an architecture model before compiling Terraform.</span>
+            </div>
 
-            <button
-              type="button"
+            <ActionButton
               onClick={handleGenerate}
-              disabled={loading || !request.trim()}
-              className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
-            >
-              {loading ? (
-                <>
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  <span>Synthesizing Architecture...</span>
-                </>
-              ) : (
+              loading={loading}
+              loadingLabel="Synthesizing Architecture..."
+              idleLabel={
                 <>
                   <IconAI className="h-4 w-4" />
                   <span>Generate Architecture</span>
                 </>
-              )}
-            </button>
+              }
+              disabled={!request.trim()}
+            />
           </div>
         </div>
 
-        {/* Step 2: Architecture Result */}
         {plan && (
           <div className="mt-8 space-y-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                    Step 2: AI Result
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                    <span className="h-1 w-1 rounded-full bg-teal-500" />
+                    Step 2 · AI Result
                   </span>
-                  <h2 className="mt-0.5 text-base font-semibold text-slate-900 dark:text-white">
+                  <h2 className="mt-1.5 text-base font-semibold text-slate-900 dark:text-white">
                     Synthesized Architecture Model
                   </h2>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowRawJson(!showRawJson)}
-                  className="rounded-md border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 dark:border-[#1e2531] dark:text-slate-400 dark:hover:bg-[#12161f]"
-                >
-                  {showRawJson ? "Hide JSON" : "View Raw JSON"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <StatusPill tone="success">
+                    <IconCheckCircle className="h-3 w-3" />
+                    Generated
+                  </StatusPill>
+                  <button
+                    type="button"
+                    onClick={() => setShowRawJson(!showRawJson)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-[#1e2531] dark:text-slate-400 dark:hover:bg-[#12161f]"
+                  >
+                    <IconTerminal className="h-3.5 w-3.5" />
+                    {showRawJson ? "Hide JSON" : "View Raw JSON"}
+                  </button>
+                </div>
               </div>
 
-              {/* Topology Components Grid */}
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                {/* Network */}
-                <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 dark:border-[#171e27] dark:bg-[#0c1015]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      Network Tier
-                    </span>
-                    <IconNetwork className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                  </div>
-                  <div className="mt-3 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">VPC</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                <TierCard
+                  icon={<IconNetwork className="h-4 w-4" />}
+                  title="Network Tier"
+                  caption="Isolation & routing"
+                >
+                  <TierRow
+                    label="VPC"
+                    mono={false}
+                    value={
+                      <span
+                        className={`inline-flex items-center gap-1 ${
+                          plan.architecture.network.vpc
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-slate-400"
+                        }`}
+                      >
+                        {plan.architecture.network.vpc ? (
+                          <IconCheckCircle className="h-3.5 w-3.5" />
+                        ) : (
+                          <IconAlertCircle className="h-3.5 w-3.5" />
+                        )}
                         {plan.architecture.network.vpc ? "Enabled" : "Disabled"}
                       </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Public Subnets</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-200">
-                        {plan.architecture.network.public_subnets}
+                    }
+                  />
+                  <TierRow label="Public Subnets" value={publicSubnets} />
+                  <TierRow label="Private Subnets" value={privateSubnets} />
+                  <div className="pt-3">
+                    <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium text-slate-400 dark:text-[#5b6779]">
+                      <span>Subnet split</span>
+                      <span className="font-mono">
+                        {publicPct}% / {privatePct}%
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Private Subnets</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-200">
-                        {plan.architecture.network.private_subnets}
-                      </span>
+                    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-[#141a22]">
+                      <div
+                        className="bg-teal-500 transition-all"
+                        style={{ width: `${publicPct}%` }}
+                      />
+                      <div
+                        className="bg-cyan-400 transition-all"
+                        style={{ width: `${privatePct}%` }}
+                      />
                     </div>
                   </div>
-                </div>
+                </TierCard>
 
-                {/* Compute */}
-                <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 dark:border-[#171e27] dark:bg-[#0c1015]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      Compute Tier
-                    </span>
-                    <IconServer className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                  </div>
-                  <div className="mt-3 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Service</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {plan.architecture.compute.service}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Instances</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-200">
-                        {plan.architecture.compute.count}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Region</span>
-                      <span className="font-mono text-slate-800 dark:text-slate-200">
-                        {plan.region}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <TierCard
+                  icon={<IconServer className="h-4 w-4" />}
+                  title="Compute Tier"
+                  caption="Workloads & scaling"
+                >
+                  <TierRow label="Service" mono={false} value={plan.architecture.compute.service} />
+                  <TierRow label="Instances" value={plan.architecture.compute.count} />
+                  <TierRow label="Region" value={plan.region} />
+                  <TierRow
+                    label="Provider"
+                    value={plan.cloud_provider.toUpperCase()}
+                  />
+                </TierCard>
 
-                {/* Database */}
-                <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 dark:border-[#171e27] dark:bg-[#0c1015]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                      Database Tier
-                    </span>
-                    <IconDatabase className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                  </div>
-                  <div className="mt-3 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Service</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {plan.architecture.database.service}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Engine</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {plan.architecture.database.engine}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 dark:text-[#768597]">Environment</span>
-                      <span className="capitalize text-slate-800 dark:text-slate-200">
-                        {plan.environment}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <TierCard
+                  icon={<IconDatabase className="h-4 w-4" />}
+                  title="Database Tier"
+                  caption="Persistence & storage"
+                >
+                  <TierRow label="Service" mono={false} value={plan.architecture.database.service} />
+                  <TierRow label="Engine" value={plan.architecture.database.engine} />
+                  <TierRow label="Environment" mono={false} value={plan.environment} />
+                  <TierRow label="Region" value={plan.region} />
+                </TierCard>
               </div>
 
-              {/* Raw JSON toggle container */}
               {showRawJson && (
-                <div className="mt-5">
-                  <pre className="max-h-[300px] overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200 dark:border-[#1e2531] dark:bg-[#05070a]">
+                <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 dark:border-[#1e2531]">
+                  <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-slate-400 dark:border-[#1e2531] dark:bg-[#0b0e13] dark:text-[#525e6e]">
+                    Raw JSON
+                  </div>
+                  <pre className="max-h-[300px] overflow-auto bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-200 dark:bg-[#05070a]">
                     {JSON.stringify(plan, null, 2)}
                   </pre>
                 </div>
               )}
 
-              {/* Terraform Generator Action */}
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4 border-t border-slate-100 dark:border-[#141a22]">
-                <p className="text-xs text-slate-500 dark:text-[#768597]">
-                  Next step: Compile verified architecture into HCL Terraform source files.
-                </p>
+              <div className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between dark:border-[#141a22]">
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-[#768597]">
+                  <IconPlay className="h-3.5 w-3.5 text-teal-500" />
+                  <span>Next: compile the verified architecture into HCL Terraform source files.</span>
+                </div>
 
-                <button
-                  type="button"
+                <ActionButton
                   onClick={handleGenerateTerraform}
-                  disabled={terraformLoading}
-                  className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
-                >
-                  {terraformLoading ? (
-                    <>
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      <span>Synthesizing Terraform...</span>
-                    </>
-                  ) : (
+                  loading={terraformLoading}
+                  loadingLabel="Synthesizing Terraform..."
+                  idleLabel={
                     <>
                       <IconPlay className="h-3 w-3" />
                       <span>Compile Terraform Code</span>
                     </>
-                  )}
-                </button>
+                  }
+                />
               </div>
 
               {terraformError && (
-                <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-                  <IconAlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{terraformError}</span>
+                <div className="mt-4">
+                  <Banner tone="error" icon={<IconAlertCircle className="h-4 w-4" />}>
+                    {terraformError}
+                  </Banner>
                 </div>
               )}
             </div>
 
-            {/* Step 3: Terraform IDE Code Preview */}
             {terraform && (
               <div className="space-y-6">
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
-                      Step 3: Terraform Source Code
+                      Step 3 · Terraform Source Code
                     </span>
                     <span className="font-mono text-[11px] text-slate-400 dark:text-[#525e6e]">
-                      Generated Files: main.tf, variables.tf, outputs.tf
+                      main.tf · variables.tf · outputs.tf
                     </span>
                   </div>
 
@@ -739,216 +947,222 @@ function AIInfrastructure() {
                   />
                 </div>
 
-                {/* Step 4: Validation Gate */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#1c222b] dark:bg-[#080b0f]">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                        Step 4: Quality & Validation Gate
-                      </span>
-                      <h3 className="mt-0.5 text-base font-semibold text-slate-900 dark:text-white">
-                        Terraform Syntax & Rule Verification
-                      </h3>
-                      <p className="mt-0.5 text-xs text-slate-500 dark:text-[#768597]">
-                        Validate provider schemas and code format without executing any infrastructure changes.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
+                  <StepHeader
+                    index="04"
+                    kicker="Quality & Validation Gate"
+                    title="Terraform Syntax & Rule Verification"
+                    description="Validate provider schemas and code format without executing any infrastructure changes."
+                  >
+                    <ActionButton
+                      variant="outline"
                       onClick={handleValidateTerraform}
-                      disabled={validationLoading}
-                      className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-4 py-2 text-xs font-semibold text-teal-600 transition hover:bg-teal-500/20 disabled:opacity-50 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-300"
-                    >
-                      {validationLoading ? (
-                        <>
-                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                          <span>Validating...</span>
-                        </>
-                      ) : (
+                      loading={validationLoading}
+                      loadingLabel="Validating..."
+                      idleLabel={
                         <>
                           <IconCheckCircle className="h-3.5 w-3.5" />
                           <span>Validate Terraform</span>
                         </>
-                      )}
-                    </button>
-                  </div>
+                      }
+                    />
+                  </StepHeader>
 
                   {validationError && (
-                    <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-                      <IconAlertCircle className="h-4 w-4 shrink-0" />
-                      <span>{validationError}</span>
+                    <div className="mt-4">
+                      <Banner tone="error" icon={<IconAlertCircle className="h-4 w-4" />}>
+                        {validationError}
+                      </Banner>
                     </div>
                   )}
 
                   {validation && (
-                    <div className="mt-5 space-y-3">
+                    <div className="mt-5 space-y-4">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div
                           className={`rounded-xl border p-4 ${
                             validation.valid
-                              ? "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10"
-                              : "border-red-500/20 bg-red-500/5 dark:bg-red-500/10"
+                              ? "border-emerald-500/20 bg-emerald-500/5 dark:border-emerald-500/25 dark:bg-emerald-500/10"
+                              : "border-red-500/20 bg-red-500/5 dark:border-red-500/25 dark:bg-red-500/10"
                           }`}
                         >
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
-                            Schema Validation
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                              Schema Validation
+                            </span>
+                            {validation.valid ? (
+                              <StatusPill tone="success">
+                                <IconCheck className="h-3 w-3" />
+                                Passed
+                              </StatusPill>
+                            ) : (
+                              <StatusPill tone="error">
+                                <IconAlertCircle className="h-3 w-3" />
+                                Failed
+                              </StatusPill>
+                            )}
+                          </div>
                           <p
-                            className={`mt-1 font-semibold ${
-                              validation.valid ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
+                            className={`mt-2 text-sm font-semibold ${
+                              validation.valid
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-red-600 dark:text-red-400"
                             }`}
                           >
-                            {validation.valid ? "✓ Configuration is valid" : "✕ Validation failed"}
+                            {validation.valid
+                              ? "Configuration is valid"
+                              : "Validation failed"}
                           </p>
                         </div>
 
                         <div
                           className={`rounded-xl border p-4 ${
                             validation.formatted
-                              ? "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-500/10"
-                              : "border-amber-500/20 bg-amber-500/5 dark:bg-amber-500/10"
+                              ? "border-emerald-500/20 bg-emerald-500/5 dark:border-emerald-500/25 dark:bg-emerald-500/10"
+                              : "border-amber-500/20 bg-amber-500/5 dark:border-amber-500/25 dark:bg-amber-500/10"
                           }`}
                         >
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
-                            Code Formatting
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-[#525e6e]">
+                              Code Formatting
+                            </span>
+                            {validation.formatted ? (
+                              <StatusPill tone="success">
+                                <IconCheck className="h-3 w-3" />
+                                Canonical
+                              </StatusPill>
+                            ) : (
+                              <StatusPill tone="warning">
+                                <IconAlertTriangle className="h-3 w-3" />
+                                Needs format
+                              </StatusPill>
+                            )}
+                          </div>
                           <p
-                            className={`mt-1 font-semibold ${
-                              validation.formatted ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                            className={`mt-2 text-sm font-semibold ${
+                              validation.formatted
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-amber-600 dark:text-amber-400"
                             }`}
                           >
-                            {validation.formatted ? "✓ Canonical format" : "⚠ Formatting required"}
+                            {validation.formatted
+                              ? "Canonical format"
+                              : "Formatting required"}
                           </p>
                         </div>
                       </div>
 
                       {(validation.validation_output || validation.validation_error) && (
-                        <pre className="overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-800 dark:border-[#1e2531] dark:bg-[#06080b] dark:text-slate-200">
+                        <pre className="max-h-[300px] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-800 dark:border-[#1e2531] dark:bg-[#06080b] dark:text-slate-200">
                           {validation.validation_output || validation.validation_error}
                         </pre>
                       )}
                     </div>
                   )}
 
-                  {/* Step 5: Stage Artifact */}
                   {validation?.valid && (
                     <div className="mt-6 border-t border-slate-200/80 pt-6 dark:border-[#171e27]">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                            Step 5: Staging Gate
-                          </span>
-                          <h4 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">
-                            Stage Terraform Artifact
-                          </h4>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-[#768597]">
-                            Persist the validated configuration as an immutable artifact ready for plan and human approval.
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
+                      <StepHeader
+                        index="05"
+                        kicker="Staging Gate"
+                        title="Stage Terraform Artifact"
+                        description="Persist the validated configuration as an immutable artifact ready for plan and human approval."
+                      >
+                        <ActionButton
                           onClick={handleStageTerraform}
-                          disabled={stageLoading || stageResult !== null}
-                          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
-                        >
-                          {stageLoading ? (
-                            <>
-                              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                              <span>Staging Artifact...</span>
-                            </>
-                          ) : stageResult ? (
-                            <span>✓ Artifact Staged</span>
-                          ) : (
-                            <span>Stage Terraform Artifact</span>
-                          )}
-                        </button>
-                      </div>
+                          disabled={stageResult !== null}
+                          loading={stageLoading}
+                          loadingLabel="Staging Artifact..."
+                          idleLabel={
+                            stageResult ? (
+                              <>
+                                <IconCheck className="h-3.5 w-3.5" />
+                                <span>Artifact Staged</span>
+                              </>
+                            ) : (
+                              <span>Stage Terraform Artifact</span>
+                            )
+                          }
+                        />
+                      </StepHeader>
 
                       {stageError && (
-                        <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-                          <IconAlertCircle className="h-4 w-4 shrink-0" />
-                          <span>{stageError}</span>
+                        <div className="mt-4">
+                          <Banner tone="error" icon={<IconAlertCircle className="h-4 w-4" />}>
+                            {stageError}
+                          </Banner>
                         </div>
                       )}
 
                       {stageResult && (
-                        <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 dark:bg-emerald-500/10">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                              ✓ Artifact successfully staged
-                            </span>
-                            <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-700 dark:text-emerald-300">
-                              ARTIFACT #{stageResult.id}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                            {stageResult.message}
-                          </p>
+                        <div className="mt-4">
+                          <Banner
+                            tone="success"
+                            icon={<IconCheckCircle className="h-4 w-4" />}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold">
+                                Artifact successfully staged
+                              </span>
+                              <span className="font-mono text-[10px] font-bold">
+                                ARTIFACT #{stageResult.id}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-slate-600 dark:text-slate-300">
+                              {stageResult.message}
+                            </p>
+                          </Banner>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Step 6: Plan Staged Artifact */}
                   {stageResult && (
                     <div className="mt-6 border-t border-slate-200/80 pt-6 dark:border-[#171e27]">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                            Step 6: Plan Preview
-                          </span>
-                          <h4 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">
-                            Generate Terraform Dry-Run Plan
-                          </h4>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-[#768597]">
-                            Compute the exact AWS resource differences and review planned additions before approval.
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
+                      <StepHeader
+                        index="06"
+                        kicker="Plan Preview"
+                        title="Generate Terraform Dry-Run Plan"
+                        description="Compute the exact AWS resource differences and review planned additions before approval."
+                      >
+                        <ActionButton
                           onClick={handleGenerateTerraformPlan}
-                          disabled={terraformPlanLoading}
-                          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
-                        >
-                          {terraformPlanLoading ? (
-                            <>
-                              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                              <span>Generating Plan...</span>
-                            </>
-                          ) : (
+                          loading={terraformPlanLoading}
+                          loadingLabel="Generating Plan..."
+                          idleLabel={
                             <>
                               <IconPlay className="h-3 w-3" />
                               <span>Generate Execution Plan</span>
                             </>
-                          )}
-                        </button>
-                      </div>
+                          }
+                        />
+                      </StepHeader>
 
                       {terraformPlanError && (
-                        <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-                          <IconAlertCircle className="h-4 w-4 shrink-0" />
-                          <span>{terraformPlanError}</span>
+                        <div className="mt-4">
+                          <Banner tone="error" icon={<IconAlertCircle className="h-4 w-4" />}>
+                            {terraformPlanError}
+                          </Banner>
                         </div>
                       )}
 
                       {terraformPlan && (
                         <div className="mt-4 space-y-3">
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="text-xs font-semibold text-slate-900 dark:text-white">
                               {terraformPlan.project_name} — Execution Plan
                             </span>
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 font-mono text-[9px] font-bold ${
-                                terraformPlan.success
-                                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                                  : "bg-red-500/20 text-red-700 dark:text-red-300"
-                              }`}
-                            >
-                              {terraformPlan.success ? "PLAN READY" : "PLAN FAILED"}
-                            </span>
+                            {terraformPlan.success ? (
+                              <StatusPill tone="success">
+                                <IconCheckCircle className="h-3 w-3" />
+                                Plan Ready
+                              </StatusPill>
+                            ) : (
+                              <StatusPill tone="error">
+                                <IconAlertCircle className="h-3 w-3" />
+                                Plan Failed
+                              </StatusPill>
+                            )}
                           </div>
 
                           {terraformPlan.plan_output && (
@@ -958,7 +1172,7 @@ function AIInfrastructure() {
                           )}
 
                           {terraformPlan.plan_error && (
-                            <pre className="max-h-[300px] overflow-auto rounded-xl border border-red-500/20 bg-red-500/10 p-4 font-mono text-xs leading-relaxed text-red-400">
+                            <pre className="max-h-[300px] overflow-auto rounded-xl border border-red-500/25 bg-red-500/10 p-4 font-mono text-xs leading-relaxed text-red-400">
                               {terraformPlan.plan_error}
                             </pre>
                           )}
@@ -967,130 +1181,130 @@ function AIInfrastructure() {
                     </div>
                   )}
 
-                  {/* Step 7: Approval Gate */}
                   {terraformPlan?.success && stageResult && (
                     <div className="mt-6 border-t border-slate-200/80 pt-6 dark:border-[#171e27]">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                            Step 7: Governance Gate
-                          </span>
-                          <h4 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">
-                            Review & Approve Terraform Artifact
-                          </h4>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-[#768597]">
-                            Authorizes the artifact for execution. Approval does not immediately trigger live AWS deployment.
-                          </p>
-                        </div>
-
+                      <StepHeader
+                        index="07"
+                        kicker="Governance Gate"
+                        title="Review & Approve Terraform Artifact"
+                        description="Authorizes the artifact for execution. Approval does not immediately trigger live AWS deployment."
+                      >
                         {!approvalResult && (
-                          <button
-                            type="button"
+                          <ActionButton
                             onClick={handleApproveTerraform}
-                            disabled={approvalLoading}
-                            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
-                          >
-                            {approvalLoading ? (
-                              <>
-                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                <span>Approving...</span>
-                              </>
-                            ) : (
+                            loading={approvalLoading}
+                            loadingLabel="Approving..."
+                            idleLabel={
                               <>
                                 <IconShield className="h-3.5 w-3.5" />
                                 <span>Approve Artifact</span>
                               </>
-                            )}
-                          </button>
+                            }
+                          />
                         )}
-                      </div>
+                      </StepHeader>
 
                       {approvalError && (
-                        <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-                          <IconAlertCircle className="h-4 w-4 shrink-0" />
-                          <span>{approvalError}</span>
+                        <div className="mt-4">
+                          <Banner tone="error" icon={<IconAlertCircle className="h-4 w-4" />}>
+                            {approvalError}
+                          </Banner>
                         </div>
                       )}
 
                       {approvalResult && (
-                        <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 dark:bg-emerald-500/10">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                              ✓ Artifact #{approvalResult.artifact_id} Approved
-                            </span>
-                            <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-700 dark:text-emerald-300">
-                              APPROVED
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                            {approvalResult.message}
-                          </p>
+                        <div className="mt-4">
+                          <Banner
+                            tone="success"
+                            icon={<IconShield className="h-4 w-4" />}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-semibold">
+                                Artifact #{approvalResult.artifact_id} approved
+                              </span>
+                              <span className="font-mono text-[10px] font-bold">
+                                APPROVED
+                              </span>
+                            </div>
+                            <p className="mt-1 text-slate-600 dark:text-slate-300">
+                              {approvalResult.message}
+                            </p>
+                          </Banner>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Step 8: Deployment Final Stage */}
                   {approvalResult?.status === "approved" && (
                     <div className="mt-6 border-t border-slate-200/80 pt-6 dark:border-[#171e27]">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                            Step 8: Cloud Deployment
-                          </span>
-                          <h4 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">
-                            Execute Terraform Apply
-                          </h4>
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-[#768597]">
-                            Runs terraform apply against the approved artifact to provision real cloud resources.
-                          </p>
-                        </div>
-
+                      <StepHeader
+                        index="08"
+                        kicker="Cloud Deployment"
+                        title="Execute Terraform Apply"
+                        description="Runs terraform apply against the approved artifact to provision real cloud resources."
+                      >
                         {!deploymentResult && (
-                          <button
-                            type="button"
+                          <ActionButton
                             onClick={handleDeployTerraform}
-                            disabled={deploymentLoading}
-                            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-500 disabled:opacity-50 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
-                          >
-                            {deploymentLoading ? (
+                            loading={deploymentLoading}
+                            loadingLabel="Deploying Infrastructure..."
+                            idleLabel={
                               <>
-                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                <span>Deploying Infrastructure...</span>
+                                <IconPlay className="h-3.5 w-3.5" />
+                                <span>Deploy Infrastructure</span>
                               </>
-                            ) : (
-                              <span>Deploy Infrastructure</span>
-                            )}
-                          </button>
+                            }
+                          />
                         )}
-                      </div>
+                      </StepHeader>
 
-                      <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-300">
-                        Notice: Terraform apply interacts with your configured cloud account and provisions real resources.
+                      <div className="mt-4">
+                        <Banner
+                          tone="warning"
+                          icon={<IconAlertTriangle className="h-4 w-4" />}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <div className="min-w-0">
+                              <p className="font-semibold">
+                                Destructive action — provisions real cloud resources
+                              </p>
+                              <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+                                Terraform apply will interact with your configured cloud
+                                account and can incur cost or modify production state. Verify
+                                the plan above before continuing.
+                              </p>
+                            </div>
+                          </div>
+                        </Banner>
                       </div>
 
                       {deploymentError && (
-                        <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-                          <IconAlertCircle className="h-4 w-4 shrink-0" />
-                          <span>{deploymentError}</span>
+                        <div className="mt-4">
+                          <Banner tone="error" icon={<IconAlertCircle className="h-4 w-4" />}>
+                            {deploymentError}
+                          </Banner>
                         </div>
                       )}
 
                       {deploymentResult && (
                         <div className="mt-4 space-y-3">
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="text-xs font-semibold text-slate-900 dark:text-white">
-                              {deploymentResult.success ? "✓ Deployment Succeeded" : "✕ Deployment Failed"}
+                              {deploymentResult.success
+                                ? "Deployment succeeded"
+                                : "Deployment failed"}
                             </span>
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 font-mono text-[9px] font-bold ${
-                                deploymentResult.success
-                                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                                  : "bg-red-500/20 text-red-700 dark:text-red-300"
-                              }`}
-                            >
-                              {deploymentResult.status.toUpperCase()}
-                            </span>
+                            {deploymentResult.success ? (
+                              <StatusPill tone="success">
+                                <IconCheckCircle className="h-3 w-3" />
+                                {deploymentResult.status.toUpperCase()}
+                              </StatusPill>
+                            ) : (
+                              <StatusPill tone="error">
+                                <IconAlertCircle className="h-3 w-3" />
+                                {deploymentResult.status.toUpperCase()}
+                              </StatusPill>
+                            )}
                           </div>
 
                           {deploymentResult.apply_output && (
@@ -1100,7 +1314,7 @@ function AIInfrastructure() {
                           )}
 
                           {deploymentResult.apply_error && (
-                            <pre className="max-h-[300px] overflow-auto rounded-xl border border-red-500/20 bg-red-500/10 p-4 font-mono text-xs leading-relaxed text-red-400">
+                            <pre className="max-h-[300px] overflow-auto rounded-xl border border-red-500/25 bg-red-500/10 p-4 font-mono text-xs leading-relaxed text-red-400">
                               {deploymentResult.apply_error}
                             </pre>
                           )}
