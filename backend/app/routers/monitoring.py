@@ -10,6 +10,7 @@ from app.core.monitoring import sanitize
 from app.core.security import get_current_user, get_admin_user
 from app.db.dependencies import get_db
 from app.models.error_event import ErrorEvent
+from app.models.infrastructure import Infrastructure
 from app.models.project import Project
 from app.models.terraform_artifact import TerraformArtifact
 from app.models.user import User
@@ -143,7 +144,9 @@ def monitoring_summary(
             or 0
         ),
         "projects_total": db.query(func.count(Project.id)).scalar() or 0,
-        "infrastructure_total": db.query(func.count(Project.id)).scalar() or 0,
+        "infrastructure_total": (
+            db.query(func.count(Infrastructure.id)).scalar() or 0
+        ),
         "artifacts_total": db.query(func.count(TerraformArtifact.id)).scalar() or 0,
         "artifacts_deployed": (
             db.query(func.count(TerraformArtifact.id))
@@ -192,7 +195,9 @@ def admin_stats(
             or 0
         ),
         "projects_total": db.query(func.count(Project.id)).scalar() or 0,
-        "infrastructure_total": db.query(func.count(Project.id)).scalar() or 0,
+        "infrastructure_total": (
+            db.query(func.count(Infrastructure.id)).scalar() or 0
+        ),
         "artifacts_total": db.query(func.count(TerraformArtifact.id)).scalar() or 0,
         "errors_7d": errors_7d,
         "last_error_at": last_error.last_seen_at if last_error else None,

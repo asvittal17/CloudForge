@@ -285,6 +285,12 @@ def bootstrap_runtime() -> None:
     """
     - Create missing tables (error_events included). Idempotent.
     - Promote configured emails to the administrator role.
+    - Recover artifacts stranded by a mid-flight crash: anything left
+      in the transient "applying" state moves to
+      "reconciliation_required" — it is never returned to "approved"
+      or assumed deployed, because the interrupted apply may have
+      partially changed real infrastructure. The Terraform state lives
+      in protected storage for inspection when reconciling.
 
       Controlled bootstrap: set CLOUDFORGE_ADMIN_EMAILS
       (comma-separated) in backend/.env before starting the server.
@@ -297,6 +303,7 @@ def bootstrap_runtime() -> None:
     from app.models.infrastructure import Infrastructure
     from app.models.terraform_artifact import TerraformArtifact
     from app.models.error_event import ErrorEvent
+    from app.services.terraform_recovery import recover_interrupted_applies
 
     Base.metadata.create_all(bind=engine)
 
@@ -307,11 +314,34 @@ def bootstrap_runtime() -> None:
         if email.strip()
     ]
 
-    if not admin_emails:
-        return
-
     db: Session = SessionLocal()
     try:
+        recovered = recover_interrupted_applies(db)
+        if recovered:
+            record_error(
+                db,
+                source="backend",
+                category="terraform_apply",
+                severity="error",
+                message=(
+                    f"Startup recovery: {recovered} artifact(s) were "
+                    "left in 'applying' by an interrupted process and "
+                    "now require infrastructure reconciliation before "
+                    "they can be re-planned and re-approved."
+                ),
+                route="/terraform",
+                http_method="POST",
+                http_status=None,
+            )
+            print(
+                "[bootstrap] recovered "
+                f"{recovered} artifact(s) from a mid-flight apply into "
+                "'reconciliation_required'"
+            )
+
+        if not admin_emails:
+            return
+
         for email in admin_emails:
             user = db.query(User).filter(User.email == email).first()
             if user and user.role != "admin":

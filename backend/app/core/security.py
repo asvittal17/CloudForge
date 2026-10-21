@@ -1,3 +1,4 @@
+
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -63,7 +64,6 @@ def verify_password(
 def create_access_token(
     data: dict
 ) -> str:
-
     to_encode = data.copy()
 
     expire = (
@@ -97,7 +97,6 @@ def _credentials_exception() -> HTTPException:
 def get_current_user_id(
     token: str = Depends(oauth2_scheme)
 ) -> int:
-
     try:
         payload = jwt.decode(
             token,
@@ -112,7 +111,7 @@ def get_current_user_id(
 
         return int(user_id)
 
-    except (JWTError, ValueError):
+    except (JWTError, ValueError, TypeError):
         raise _credentials_exception()
 
 
@@ -123,8 +122,8 @@ def get_current_user(
     """
     Resolve the authenticated, active user for the request.
 
-    Raises 401 for invalid/expired tokens and 401 for disabled accounts
-    so clients can distinguish "sign in again" from "account disabled".
+    Raises 401 for invalid or expired tokens, missing users,
+    malformed user IDs, and disabled accounts.
     """
     credentials_exception = _credentials_exception()
 
@@ -140,10 +139,17 @@ def get_current_user(
         if user_id is None:
             raise credentials_exception
 
-    except (JWTError, ValueError):
+        # Validate the subject before querying the database.
+        user_id = int(user_id)
+
+    except (JWTError, ValueError, TypeError):
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
 
     if not user:
         raise credentials_exception
@@ -164,8 +170,8 @@ def get_admin_user(
     """
     Server-verified administrator guard for the Admin Console API.
 
-    The role is read from the database on every request — never from the
-    JWT alone, from the UI, or from local storage.
+    The role is read from the database on every request — never from
+    the JWT alone, from the UI, or from local storage.
     """
     if current_user.role != "admin":
         raise HTTPException(
