@@ -1,5 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
 
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from app.core.security import get_current_user
+from app.db.dependencies import get_db
+from app.models.user import User
 from app.schemas.ai import (
     InfrastructureAIRequest,
     InfrastructureAIResponse,
@@ -21,6 +25,10 @@ from app.services.terraform_validator import (
     validate_terraform,
 )
 
+from app.services.terraform_security_scanner import (
+    scan_terraform,
+)
+
 
 router = APIRouter(
     prefix="/ai",
@@ -38,6 +46,7 @@ router = APIRouter(
 )
 def generate_ai_infrastructure(
     request_data: InfrastructureAIRequest,
+    current_user: User = Depends(get_current_user),
 ):
     if not request_data.request.strip():
         raise HTTPException(
@@ -69,6 +78,7 @@ def generate_ai_infrastructure(
 )
 def generate_ai_terraform(
     request_data: AITerraformRequest,
+    current_user: User = Depends(get_current_user),
 ):
     try:
         terraform_files = generate_terraform_from_ai_plan(
@@ -106,6 +116,7 @@ def generate_ai_terraform(
 )
 def validate_ai_terraform(
     request_data: AITerraformValidateRequest,
+    current_user: User = Depends(get_current_user),
 ):
     try:
         result = validate_terraform(
@@ -118,4 +129,43 @@ def validate_ai_terraform(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Terraform validation failed: {error}",
+        )
+
+
+# ============================================================
+# Scan AI-Generated Terraform for Security Issues
+# ============================================================
+
+@router.post(
+    "/terraform/security-scan",
+)
+def scan_ai_terraform_security(
+    request_data: AITerraformValidateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        result = scan_terraform(
+            request_data.terraform
+        )
+
+        # Distinguish scanner execution errors from security findings.
+        # A completed scan can succeed even when checks fail.
+        if not result.get("success", False):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.get(
+                    "error",
+                    "Terraform security scan failed",
+                ),
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terraform security scan failed: {error}",
         )

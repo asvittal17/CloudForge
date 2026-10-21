@@ -16,6 +16,7 @@ from app.services.terraform_applier import apply_terraform
 from app.services.terraform_generator import generate_terraform
 from app.services.terraform_planner import plan_terraform
 from app.services.terraform_validator import validate_terraform
+from app.services.terraform_security_scanner import scan_terraform
 
 
 router = APIRouter(
@@ -108,34 +109,51 @@ def validate_project_terraform(
             detail="Project not found",
         )
 
-    infrastructure = (
-        db.query(Infrastructure)
+    # Validate the Terraform artifact produced by the AI Builder,
+    # rather than regenerating a separate configuration from Infrastructure.
+    artifact = (
+        db.query(TerraformArtifact)
         .filter(
-            Infrastructure.project_id == project_id
+            TerraformArtifact.project_id == project_id,
+            TerraformArtifact.status.in_(
+                ["staged", "plan_ready", "approved"]
+            ),
         )
+        .order_by(TerraformArtifact.id.desc())
         .first()
     )
 
-    if not infrastructure:
+    if artifact is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Infrastructure configuration not found",
+            detail=(
+                "No staged Terraform artifact was found. "
+                "Compile and stage the AI-generated Terraform first."
+            ),
         )
 
-    try:
-        terraform_files = generate_terraform(
-            infrastructure
-        )
-    except ValueError as error:
+    terraform_files = {
+        "main.tf": artifact.main_tf or "",
+        "variables.tf": artifact.variables_tf or "",
+        "outputs.tf": artifact.outputs_tf or "",
+    }
+
+    missing_files = [
+        filename
+        for filename, content in terraform_files.items()
+        if not content.strip()
+    ]
+    if missing_files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            detail=(
+                "The staged Terraform artifact is missing required file(s): "
+                + ", ".join(missing_files)
+            ),
         )
 
     try:
-        validation_result = validate_terraform(
-            terraform_files
-        )
+        validation_result = validate_terraform(terraform_files)
 
     except subprocess.TimeoutExpired:
         raise HTTPException(
@@ -158,16 +176,14 @@ def validate_project_terraform(
     return {
         "project_id": project.id,
         "project_name": project.name,
+        "artifact_id": artifact.id,
+        "artifact_status": artifact.status,
         "valid": validation_result["valid"],
         "formatted": validation_result["formatted"],
         "format_output": validation_result["format_output"],
         "format_error": validation_result["format_error"],
-        "validation_output": validation_result[
-            "validation_output"
-        ],
-        "validation_error": validation_result[
-            "validation_error"
-        ],
+        "validation_output": validation_result["validation_output"],
+        "validation_error": validation_result["validation_error"],
     }
 
 
@@ -316,6 +332,105 @@ def stage_terraform(
         "project_id": artifact.project_id,
         "status": artifact.status,
         "message": "Terraform configuration staged successfully",
+    }
+
+
+# ========================================
+
+# ========================================
+# Scan Terraform Artifact for Security Issues
+# ========================================
+
+@router.post("/{project_id}/artifacts/{artifact_id}/security-scan")
+def scan_staged_terraform_security(
+    project_id: int,
+    artifact_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Scan the exact Terraform artifact stored in the database."""
+
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.owner_id == user_id,
+        )
+        .first()
+    )
+
+    if project is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found",
+        )
+
+    artifact = (
+        db.query(TerraformArtifact)
+        .filter(
+            TerraformArtifact.id == artifact_id,
+            TerraformArtifact.project_id == project_id,
+        )
+        .first()
+    )
+
+    if artifact is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Terraform artifact not found",
+        )
+
+    allowed_statuses = {"staged", "plan_ready", "approved"}
+    if artifact.status not in allowed_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This Terraform artifact cannot be scanned in its current "
+                f"status: '{artifact.status}'."
+            ),
+        )
+
+    terraform_files = {
+        "main.tf": artifact.main_tf or "",
+        "variables.tf": artifact.variables_tf or "",
+        "outputs.tf": artifact.outputs_tf or "",
+    }
+
+    try:
+        result = scan_terraform(terraform_files)
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="Terraform security scan timed out",
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                "Checkov executable was not found. Verify the backend "
+                "virtual environment."
+            ),
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Terraform security scan failed: {error}",
+        )
+
+    if not isinstance(result, dict):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Terraform security scanner returned an unexpected response.",
+        )
+
+    # A completed scan with failed checks is still a valid scan result.
+    # `passed` indicates whether the security policy checks passed.
+    return {
+        "project_id": project.id,
+        "project_name": project.name,
+        "artifact_id": artifact.id,
+        "artifact_status": artifact.status,
+        **result,
     }
 
 
@@ -559,7 +674,50 @@ def apply_terraform_artifact(
     }
 
     # ----------------------------------------
-    # Apply Terraform
+    # SECURITY GATE
+    # Re-scan the exact stored artifact immediately before apply.
+    # Fail closed if Checkov cannot run or any policy checks fail.
+    # ----------------------------------------
+
+    try:
+        security_result = scan_terraform(terraform_files)
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Deployment blocked: Terraform security scan failed: {error}",
+        )
+
+    if not security_result.get("success", False):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "message": "Deployment blocked because the security scan could not complete.",
+                "error": security_result.get(
+                    "error",
+                    "Terraform security scan failed",
+                ),
+            },
+        )
+
+    if not security_result.get("passed", False):
+        summary = security_result.get("summary", {})
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "message": (
+                    "Deployment blocked by CloudForge security policy. "
+                    "Resolve the failed checks before applying this artifact."
+                ),
+                "artifact_id": artifact.id,
+                "failed_checks": summary.get("failed", 0),
+                "passed_checks": summary.get("passed", 0),
+                "total_checks": summary.get("total", 0),
+                "findings": security_result.get("findings", []),
+            },
+        )
+
+    # ----------------------------------------
+    # Apply Terraform only after the security gate passes.
     # ----------------------------------------
 
     try:

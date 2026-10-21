@@ -3,6 +3,45 @@ interface IconProps {
   size?: number
 }
 
+export function IconLogOut({ className = "w-4 h-4", size }: IconProps) {
+  return (
+    <svg
+      width={size || 18}
+      height={size || 18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" x2="9" y1="12" y2="12" />
+    </svg>
+  )
+}
+
+export function IconSearch({ className = "w-4 h-4", size }: IconProps) {
+  return (
+    <svg
+      width={size || 18}
+      height={size || 18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  )
+}
+
 export function CloudForgeLogo({ className = "w-6 h-6", size }: IconProps) {
   return (
     <svg

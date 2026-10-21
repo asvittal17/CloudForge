@@ -37,5 +37,5 @@ class Project(Base):
 
     owner = relationship(
         "User",
-        backref="projects"
+        backref="projects",
     )
