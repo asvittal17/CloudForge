@@ -114,6 +114,34 @@ def test_invalid_terraform_inputs_are_rejected(files):
 
 
 @patch("app.services.terraform_planner.subprocess.run")
+def test_persistence_failure_returns_structured_error(mock_run, tmp_path):
+    """
+    A plan that Terraform generated but CloudForge failed to persist
+    must NEVER look like a success: no digests, success False, and a
+    truthful error message. This is the structured failure that stops
+    the artifact from ever reaching plan_ready with broken identity.
+    """
+    mock_run.side_effect = [
+        Mock(returncode=0, stdout="init ok", stderr=""),
+        Mock(returncode=0, stdout="Plan: 1 to add.", stderr=""),
+    ]
+
+    # plan_dir lives under a plain file, so mkdir fails (OSError).
+    blocker = tmp_path / "blocker-file"
+    blocker.write_text("not a directory", encoding="utf-8")
+
+    result = plan_terraform(
+        VALID_FILES,
+        plan_dir=blocker / "artifact-10",
+    )
+
+    assert result["success"] is False
+    assert result["plan_sha256"] is None
+    assert result["config_sha256"] is None
+    assert "not be persisted" in result["plan_error"]
+
+
+@patch("app.services.terraform_planner.subprocess.run")
 def test_init_timeout_returns_structured_error(mock_run):
     mock_run.side_effect = subprocess.TimeoutExpired(
         cmd=["terraform", "init"],

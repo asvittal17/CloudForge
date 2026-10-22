@@ -246,8 +246,25 @@ class TestPlanEndpoint:
 
         result = tf_router.plan_staged_terraform(5, 10, user_id=1, db=db)
 
+        assert result["success"] is True
         assert result["status"] == "plan_ready"
         assert result["plan_sha256"] == PLAN_DIGEST
+
+        # Full API contract (including the explicit `success` field —
+        # its absence once made a truthful plan_ready response render
+        # as "Plan Failed" in the frontend).
+        assert set(result) >= {
+            "artifact_id",
+            "project_id",
+            "project_name",
+            "status",
+            "success",
+            "plan_output",
+            "plan_error",
+            "plan_sha256",
+            "config_sha256",
+            "planned_at",
+        }
 
         transition = artifact.query_mock.update.call_args.args[0]
         assert transition["status"] == "plan_ready"
@@ -279,6 +296,7 @@ class TestPlanEndpoint:
 
         # A failed plan must leave the artifact staged and digest-free
         # so no stale plan can later be approved or applied.
+        assert result["success"] is False
         assert result["status"] == "staged"
 
         transition = artifact.query_mock.update.call_args.args[0]
@@ -358,6 +376,34 @@ class TestApproveEndpoint:
         # The artifact must NOT have been transitioned.
         artifact_status = db.artifact.status
         assert artifact_status != "approved"
+
+    @patch.object(tf_router, "get_plan_path")
+    def test_approve_rejects_configuration_digest_mismatch(
+        self, plan_path_mock, tmp_path
+    ):
+        """
+        The stored configuration must be exactly what was planned: if
+        the recorded config digest no longer matches the artifact's
+        .tf contents, approval is refused even though the plan file
+        itself is intact.
+        """
+        plan_file = tmp_path / "approved.tfplan"
+        plan_file.write_text("REAL PLAN BYTES", encoding="utf-8")
+        plan_path_mock.side_effect = lambda *_: plan_file
+
+        artifact = make_artifact(status="plan_ready")
+        # The plan file itself is intact (matching digest), but the
+        # configuration it was planned from no longer matches what is
+        # stored in the artifact.
+        artifact.plan_sha256 = sha256_file(plan_file)
+        artifact.config_sha256 = "0" * 64
+        db, _, _ = self._db_for(artifact)
+
+        with pytest.raises(HTTPException) as exc:
+            tf_router.approve_terraform_artifact(5, 10, user_id=1, db=db)
+
+        assert exc.value.status_code == 400
+        assert "configuration has changed" in exc.value.detail
 
     @patch.object(tf_router, "_verify_saved_plan_integrity")
     def test_approve_success_sets_approved_at(self, verify_mock):

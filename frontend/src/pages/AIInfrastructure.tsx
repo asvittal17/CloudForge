@@ -74,13 +74,21 @@ interface TerraformValidationResult {
 }
 
 interface TerraformPlanResult {
+  artifact_id: number
+  project_id: number
   project_name: string
+  status: string
+  // Explicit outcome from the backend: true EXACTLY when the plan was
+  // generated AND persisted and the artifact reached plan_ready.
+  // Never infer success from plan_output text (this used to be the
+  // bug: the field existed here but the API omitted it, so it was
+  // undefined and every success gate read falsy).
   success: boolean
   plan_output: string
   plan_error: string
-  artifact_id?: number
-  project_id?: number
-  status?: string
+  plan_sha256: string | null
+  config_sha256: string | null
+  planned_at: string | null
 }
 
 interface TerraformStageResult {
@@ -540,7 +548,7 @@ function AIInfrastructure() {
       setApprovalError("Terraform must be staged before approval.")
       return
     }
-    if (!terraformPlan?.success) {
+    if (!hasValidPlan) {
       setApprovalError("Terraform must have a successful plan before approval.")
       return
     }
@@ -576,7 +584,7 @@ function AIInfrastructure() {
       setDeploymentError("Terraform must be approved before deployment.")
       return
     }
-    if (!terraformPlan?.success) {
+    if (!hasValidPlan) {
       setDeploymentError("Terraform must have a successful plan before deployment.")
       return
     }
@@ -599,11 +607,18 @@ function AIInfrastructure() {
     }
   }
 
+  // A plan is only valid when the backend says the execution plan was
+  // generated AND persisted (`success`) AND the artifact reached the
+  // plan_ready state with fresh identity metadata. Rendering
+  // "Plan Ready" from plan_output text alone would be dishonest.
+  const hasValidPlan =
+    terraformPlan?.success === true && terraformPlan.status === "plan_ready"
+
   const currentStep: WorkflowStepId = deploymentResult
     ? "deploy"
     : approvalResult?.status === "approved"
       ? "deploy"
-      : terraformPlan?.success
+      : hasValidPlan
         ? "approve"
         : stageResult
           ? "plan"
@@ -617,7 +632,7 @@ function AIInfrastructure() {
   if (plan) completedSteps.push("generate")
   if (validation?.valid) completedSteps.push("validate")
   if (stageResult) completedSteps.push("stage")
-  if (terraformPlan?.success) completedSteps.push("plan")
+  if (hasValidPlan) completedSteps.push("plan")
   if (approvalResult?.status === "approved") completedSteps.push("approve")
   if (deploymentResult?.success) completedSteps.push("deploy")
 
@@ -1152,7 +1167,7 @@ function AIInfrastructure() {
                             <span className="text-xs font-semibold text-slate-900 dark:text-white">
                               {terraformPlan.project_name} — Execution Plan
                             </span>
-                            {terraformPlan.success ? (
+                            {hasValidPlan ? (
                               <StatusPill tone="success">
                                 <IconCheckCircle className="h-3 w-3" />
                                 Plan Ready
@@ -1181,7 +1196,7 @@ function AIInfrastructure() {
                     </div>
                   )}
 
-                  {terraformPlan?.success && stageResult && (
+                  {hasValidPlan && stageResult && (
                     <div className="mt-6 border-t border-slate-200/80 pt-6 dark:border-[#171e27]">
                       <StepHeader
                         index="07"

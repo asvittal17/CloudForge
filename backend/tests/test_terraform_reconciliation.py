@@ -226,6 +226,93 @@ class TestReconciliationLifecycle:
 
 
 # ========================================
+# Inconsistent legacy artifacts
+# ========================================
+
+
+class TestLegacyInconsistentArtifacts:
+    """
+    Rows found in the wild with status="approved" but NULL plan
+    metadata (created before saved-plan integrity existed). They must
+    never be approvable or deployable, and the safe recovery is the
+    same as for interrupted applies: re-plan fresh (new digests, no
+    inherited approval), then approve fresh. No row or plan file is
+    ever deleted during recovery.
+    """
+
+    def _legacy(self):
+        return make_artifact(
+            status="approved",
+            plan_sha256=None,
+            config_sha256=None,
+        )
+
+    def test_legacy_approved_cannot_be_approved(self):
+        artifact = self._legacy()
+        db = _plan_endpoint_db(artifact)
+
+        with pytest.raises(HTTPException) as exc:
+            tf_router.approve_terraform_artifact(5, 10, user_id=1, db=db)
+
+        assert exc.value.status_code == 400
+        assert "successful Terraform plan" in exc.value.detail
+
+    def test_legacy_approved_cannot_be_deployed(self):
+        artifact = self._legacy()
+        db = _plan_endpoint_db(artifact)
+
+        with pytest.raises(HTTPException) as exc:
+            tf_router.apply_terraform_artifact(5, 10, user_id=1, db=db)
+
+        # Refused either by the disabled apply gate (403, checked
+        # first) or by the missing saved-plan identity (400); both
+        # paths prevent deployment. The 400 path with the gate enabled
+        # is covered by
+        # TestApplyEndpoint.test_apply_rejects_missing_plan_identity.
+        assert exc.value.status_code in (400, 403)
+        assert exc.value.status_code != 200
+
+    def test_legacy_approved_can_be_replanned_with_fresh_approval(
+        self,
+    ):
+        """
+        Re-planning the legacy artifact produces a complete new plan
+        identity (digests recorded, approved_at cleared) so approval
+        must happen fresh through the normal verified workflow.
+        """
+        artifact = self._legacy()
+        db = _plan_endpoint_db(artifact)
+        artifact.query_mock.update.return_value = 1
+
+        with (
+            patch.object(
+                tf_router,
+                "plan_terraform",
+                return_value={
+                    "success": True,
+                    "plan_output": "Plan: 1 to add.",
+                    "plan_error": "",
+                    "plan_sha256": PLAN_DIGEST,
+                    "config_sha256": CONFIG_DIGEST,
+                },
+            ),
+            patch.object(
+                tf_router,
+                "ensure_artifact_storage",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = tf_router.plan_staged_terraform(5, 10, user_id=1, db=db)
+
+        assert result["success"] is True
+        assert result["status"] == "plan_ready"
+        transition = artifact.query_mock.update.call_args.args[0]
+        assert transition["plan_sha256"] == PLAN_DIGEST
+        assert transition["config_sha256"] == CONFIG_DIGEST
+        assert transition["approved_at"] is None
+
+
+# ========================================
 # Applier outcome classification
 # ========================================
 

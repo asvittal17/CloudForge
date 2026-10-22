@@ -617,6 +617,12 @@ def plan_staged_terraform(
         "artifact_id": artifact.id,
         "project_id": project.id,
         "project_name": project.name,
+        # Explicit planning outcome for the API contract: `success` is
+        # true EXACTLY when a plan was generated AND persisted, which
+        # is also what moved the artifact to plan_ready. Callers must
+        # never infer success from plan_output text or plan_error
+        # emptiness.
+        "success": plan_result.get("success", False),
         "status": plan_outcome_status,
         "plan_output": plan_result.get("plan_output", ""),
         "plan_error": plan_result.get("plan_error", ""),
